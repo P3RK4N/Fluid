@@ -2,14 +2,8 @@ using System;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 
-public class KernelPreviewer : MonoBehaviour
+public class KernelPreviewer : Previewer
 {
-    [SerializeField]
-    Vector2Int resolution = new(400, 400);
-
-    [SerializeField]
-    Vector2 scale = new(4, 1);
-
     [SerializeField]
     bool showF = true;
 
@@ -19,47 +13,38 @@ public class KernelPreviewer : MonoBehaviour
     [SerializeField]
     float h = 1.4f;
 
-    void OnValidate()
+    Kernel k;
+
+    protected override void preDraw()
     {
-        GetComponent<Renderer>().sharedMaterial.mainTexture = generateTexture();
+        k = new SphStdKernel(h);
     }
 
-    private Texture generateTexture()
+    protected override Color draw(Vector2 coords)
     {
-        Texture2D texture = new Texture2D(resolution.x, resolution.y);
-        texture.filterMode = FilterMode.Bilinear;
-        texture.wrapMode = TextureWrapMode.Clamp;
+        float res = k.F(coords.x);
+        float dRes = k.dF(coords.x);
 
-        Color[] values = new Color[resolution.x * resolution.y];
-        Kernel k = new SphStdKernel(h);
+        Color color = Style.DarkColor;
+        if (showF && shouldPlot(coords.y, res))
+        {
+            color.r = 1.0f;
+        }
+        if (showDF && shouldPlot(coords.y, dRes))
+        {
+            color.g = 1.0f;
+        }
+        if (coords.x == 0.0f || coords.y == 0.0f)
+        {
+            color = Color.white;
+        }
 
-        for (int j = 0; j < resolution.y; j++)
-            for (int i = 0; i < resolution.x; i++)
-            {
-                Vector2 coords = mapToScale(i, j);
-                float res = k.F(coords.x);
-                float dRes = k.dF(coords.x);
+        return color;
+    }
 
-                Color color = Style.DarkColor;
-                if (showF && shouldPlot(coords.y, res))
-                {
-                    color.r = 1.0f;
-                }
-                if (showDF && shouldPlot(coords.y, dRes))
-                {
-                    color.g = 1.0f;
-                }
-                if (coords.x == 0.0f || coords.y == 0.0f)
-                {
-                    color = Color.white;
-                }
-
-                values[j * resolution.x + i] = color;
-            }
-
-        texture.SetPixels(values);
-        texture.Apply();
-        return texture;
+    protected override void postDraw()
+    {
+        
     }
 
     private bool shouldPlot(float y, float res)
@@ -71,12 +56,5 @@ public class KernelPreviewer : MonoBehaviour
         }
 
         return Mathf.Abs(y) < Mathf.Abs(res);
-    }
-
-    private Vector2 mapToScale(int i, int j)
-    {
-        float mappedX = (i / (float)resolution.x - 0.5f) * scale.x;
-        float mappedY = (j / (float)resolution.y - 0.5f) * scale.y;
-        return new Vector2(mappedX, mappedY);
     }
 }
