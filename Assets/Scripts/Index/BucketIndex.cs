@@ -45,15 +45,16 @@ public class BucketIndex
 
     public void remove(int id)
     {
-        var indices = reverseIndex[id];
-        reverseIndex.Remove(id);
+        if (reverseIndex.TryGetValue(id, out int4 indices))
+        {
+            var bucket = index[indices.x, indices.y, indices.z];
+            int elementIndex = indices.w;
+            reverseIndex.Remove(id);
 
-        var bucket = index[indices.x, indices.y, indices.z];
-        int elementIndex = indices.w;
-
-        // Swap and pop
-        bucket[elementIndex] = bucket[bucket.Count - 1];
-        bucket.RemoveAt(bucket.Count - 1);
+            // Swap and pop
+            bucket[elementIndex] = bucket[bucket.Count - 1];
+            bucket.RemoveAt(bucket.Count - 1);
+        }
     }
 
     public List<int> getBucket(Vector3Int bucketCoords)

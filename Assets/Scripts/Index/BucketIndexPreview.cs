@@ -1,7 +1,6 @@
-using System;
 using System.Collections.Generic;
-using Unity.Mathematics;
-using Unity.VisualScripting;
+using System.Drawing;
+using UnityEditor;
 using UnityEngine;
 
 
@@ -13,19 +12,14 @@ public class BucketIndexPreview : MonoBehaviour
     [SerializeField]
     float radius = 0.5f;
 
-    [SerializeField]
-    Vector3 point;
-
     List<Vector3> randomPoints;
-
     BucketIndex index;
 
     void OnValidate()
     {
         index = new BucketIndex(radius, resolution.x, resolution.y, resolution.z);
-        initRandomPoints();
-        index.put(-1, point);
 
+        initRandomPoints();
         for (int i = 0; i < randomPoints.Count; i++)
         {
             index.put(i, randomPoints[i]);
@@ -42,24 +36,24 @@ public class BucketIndexPreview : MonoBehaviour
     {
         Vector3 offset = transform.localPosition;
 
-        foreach (var point in randomPoints)
-        {
-            Gizmos.DrawIcon(offset + point, "", false, Color.red);
-        }
+        // Drawing all random points
+        randomPoints.ForEach(p => Gizmos.DrawIcon(offset + p, "", false, Style.DarkColor));
 
+        // Drawing main point
+        Vector3 mainPoint = transform.GetChild(0).localPosition;
+        Gizmos.DrawIcon(offset + mainPoint, "", false, Style.LightColor);
+        Gizmos.color = Style.LightColor;
+        Gizmos.DrawWireSphere(offset + mainPoint, radius);
+
+        // Highlighting neighbors
         float radius2 = radius * radius;
-
-        Gizmos.DrawIcon(offset + point, "", false, Color.blue);
-
-        index.ForEachNeighbor(point, id =>
+        index.ForEachNeighbor(mainPoint, id =>
         {
-            if (id == -1) return;
-
             var neighbor = randomPoints[id];
 
-            if (Vector3.SqrMagnitude(point - neighbor) <= radius2)
+            if (Vector3.SqrMagnitude(mainPoint - neighbor) <= radius2)
             {
-                Gizmos.DrawIcon(offset + neighbor, "", false, Color.green);
+                Gizmos.DrawIcon(offset + neighbor - Camera.current.transform.forward * 0.03f, "", false, Style.LightColor);
             }
         });
     }
@@ -81,25 +75,24 @@ public class BucketIndexPreview : MonoBehaviour
         {
             var center = bottomBackLeftCenter + dZ * k + dX * i + dY * j;
             var bucket = index.getBucket(new Vector3Int(i, j, k));
-            var size = bucket.Count > 0 ? idn * 1.05f : idn;
-            Gizmos.color = bucket.Count > 0 ? Color.gray : Color.gray;
-
+            var size = bucket.Count > 0 ? idn * 1.03f : idn;
+            Gizmos.color = bucket.Count > 0 ? Color.gray : Color.white;
             Gizmos.DrawWireCube(center, size);
         }
     }
 
     private void initRandomPoints()
     {
-        int seed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
-        UnityEngine.Random.InitState(0);
+        int seed = Random.Range(int.MinValue, int.MaxValue);
+        Random.InitState(0);
         Vector3 res = new Vector3(resolution.x, resolution.y, resolution.z);
         randomPoints.Clear();
         for (int i = 0; i < 100; i++)
         {
-            var p = UnityEngine.Random.insideUnitSphere * 0.5f + Vector3.one * 0.5f;
+            var p = Random.insideUnitSphere * 0.5f + Vector3.one * 0.5f;
             p.Scale(res * radius);
             randomPoints.Add(p);
         }
-        UnityEngine.Random.InitState(seed);
+        Random.InitState(seed);
     }
 }
