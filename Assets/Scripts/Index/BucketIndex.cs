@@ -3,8 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Assertions;
 
-public class BucketIndex
+public class BucketIndex<T>
 {
     private int resX;
     private int resY;
@@ -15,8 +16,10 @@ public class BucketIndex
     Dictionary<int, int4> reverseIndex;
     List<int>[,,] index;
 
-    public BucketIndex(float radius, int resX, int resY, int resZ)
+    public BucketIndex(float radius, int resX, int resY, int resZ = 1)
     {
+        Assert.IsTrue(typeof(T) == typeof(Vector2) || typeof(T) == typeof(Vector3), "Type should be either Vector2 or Vector3");
+
         this.radius = radius;
         this.inverseRadius = 1.0f / radius;
         this.resX = resX;
@@ -27,17 +30,17 @@ public class BucketIndex
         reverseIndex = new();
     }
 
-    public void put(int id, Vector3 position)
+    public void put(int id, T position)
     {
         Vector3Int bucketCoords = getBucketCoords(position);
         var bucket = getBucket(bucketCoords);
         var elementIndex = bucket.Count;
-
+        
         bucket.Add(id);
         reverseIndex.Add(id, new int4(bucketCoords.x, bucketCoords.y, bucketCoords.z, elementIndex));
     }
 
-    public void update(int id, Vector3 position)
+    public void update(int id, T position)
     {
         remove(id);
         put(id, position);
@@ -57,6 +60,12 @@ public class BucketIndex
         }
     }
 
+    public void clear()
+    {
+        index = new List<int>[resX, resY, resZ];
+        reverseIndex.Clear();
+    }
+
     public List<int> getBucket(Vector3Int bucketCoords)
     {
         if (index[bucketCoords.x, bucketCoords.y, bucketCoords.z] == null)
@@ -67,18 +76,35 @@ public class BucketIndex
         return index[bucketCoords.x, bucketCoords.y, bucketCoords.z];
     }
 
-    private Vector3Int getBucketCoords(Vector3 position)
+    private Vector3Int getBucketCoords(T position)
     {
-        position *= inverseRadius;
-        return new Vector3Int
-        (
-            Mod(Mathf.FloorToInt(position.x), resX),
-            Mod(Mathf.FloorToInt(position.y), resY),
-            Mod(Mathf.FloorToInt(position.z), resZ)
-        );
+        if (position is Vector3 pos3)
+        {
+            pos3 *= inverseRadius;
+            return new Vector3Int
+            (
+                Mod(Mathf.FloorToInt(pos3.x), resX),
+                Mod(Mathf.FloorToInt(pos3.y), resY),
+                Mod(Mathf.FloorToInt(pos3.z), resZ)
+            );
+        }
+        else if (position is Vector2 pos2)
+        {
+            pos2 *= inverseRadius;
+            return new Vector3Int
+            (
+                Mod(Mathf.FloorToInt(pos2.x), resX),
+                Mod(Mathf.FloorToInt(pos2.y), resY),
+                0
+            );
+        }
+        else
+        {
+            throw new InvalidOperationException();
+        }
     }
 
-    public void ForEachNeighbor(Vector3 point, Action<int> action)
+    public void ForEachNeighbor(T point, Action<int> action)
     {
         Vector3Int coords = getBucketCoords(point);
         var diff = new[] { -1, 0, 1 };
@@ -98,6 +124,6 @@ public class BucketIndex
         }
     }
 
-    private int Mod(int a, int n) => (a % n + n) % n;
+    public static int Mod(int a, int n) => (a % n + n) % n;
 
 }

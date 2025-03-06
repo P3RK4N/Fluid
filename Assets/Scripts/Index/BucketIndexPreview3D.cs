@@ -3,8 +3,14 @@ using UnityEditor;
 using UnityEngine;
 
 
-public class BucketIndexPreview : MonoBehaviour
+public class BucketIndexPreview3D : MonoBehaviour
 {
+    [SerializeField]
+    bool showGrid = true;
+
+    [SerializeField]
+    bool showPoints = true;
+
     [SerializeField]
     Vector3Int resolution = new Vector3Int(10, 10, 10);
 
@@ -12,11 +18,11 @@ public class BucketIndexPreview : MonoBehaviour
     float radius = 0.5f;
 
     List<Vector3> randomPoints;
-    BucketIndex index;
+    BucketIndex<Vector3> index;
 
     void OnValidate()
     {
-        index = new BucketIndex(radius, resolution.x, resolution.y, resolution.z);
+        index = new BucketIndex<Vector3>(radius, resolution.x, resolution.y, resolution.z);
 
         initRandomPoints();
         for (int i = 0; i < randomPoints.Count; i++)
@@ -27,8 +33,8 @@ public class BucketIndexPreview : MonoBehaviour
     
     private void OnDrawGizmos()
     {
-        drawGrid();
-        drawPoints();
+        if (showGrid) drawGrid();
+        if (showPoints) drawPoints();
     }
 
     private void drawPoints()
@@ -82,6 +88,11 @@ public class BucketIndexPreview : MonoBehaviour
 
     private void initRandomPoints()
     {
+        if (randomPoints == null)
+        {
+            randomPoints = new List<Vector3>(100);
+        }
+
         int seed = Random.Range(int.MinValue, int.MaxValue);
         Random.InitState(0);
         Vector3 res = new Vector3(resolution.x, resolution.y, resolution.z);

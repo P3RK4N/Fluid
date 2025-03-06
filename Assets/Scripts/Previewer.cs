@@ -1,16 +1,18 @@
+using System.Threading.Tasks;
+using UnityEditor;
 using UnityEngine;
 
 public abstract class Previewer : MonoBehaviour
 {
     [SerializeField]
-    Vector2Int resolution = new(400, 400);
+    protected Vector2Int resolution = new(400, 400);
 
     [SerializeField]
-    Vector2 scale = new(4, 1);
+    protected Vector2 scale = new(4, 1);
 
-    private void OnValidate()
+    protected void OnValidate()
     {
-        GetComponent<Renderer>().sharedMaterial.mainTexture = generateTexture();
+        GetComponentInChildren<Renderer>().sharedMaterial.mainTexture = generateTexture();
     }
 
     private Texture generateTexture()
@@ -22,11 +24,13 @@ public abstract class Previewer : MonoBehaviour
         Color[] values = new Color[resolution.x * resolution.y];
 
         preDraw();
-        for (int j = 0; j < resolution.y; j++)
+        Parallel.For(0, resolution.y, j =>
+        {
             for (int i = 0; i < resolution.x; i++)
             {
                 values[j * resolution.x + i] = draw(transformCoords(i, j));
             }
+        });
         postDraw();
 
         texture.SetPixels(values);
@@ -34,7 +38,7 @@ public abstract class Previewer : MonoBehaviour
         return texture;
     }
 
-    protected Vector2 transformCoords(int x, int y)
+    protected virtual Vector2 transformCoords(int x, int y)
     {
         float mappedX = (x / (float)resolution.x - 0.5f) * scale.x;
         float mappedY = (y / (float)resolution.y - 0.5f) * scale.y;
@@ -45,3 +49,4 @@ public abstract class Previewer : MonoBehaviour
     protected abstract Color draw(Vector2 coords);
     protected virtual void postDraw() { }
 }
+
