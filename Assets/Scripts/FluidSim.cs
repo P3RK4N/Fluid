@@ -3,31 +3,44 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
-public class FluidSim
+public abstract class FluidSim<T>
 {
-    private int numParticles;
-    private float mass;
-    private float radius;
-    private int resolution;
+    protected int numParticles;
+    protected float mass;
+    protected float radius;
+    protected float radius2;
+    protected int resolution;
+    protected SphStdKernel2D kernel;
 
-    private List<Vector3> positions;
-    private List<Vector3> velocities;
-    private List<Vector3> forces;
+    protected List<T> positions;
+    protected List<T> velocities;
+    protected List<T> forces;
 
-    private BucketIndex<Vector3> index;
+    protected BucketIndex<T> index;
+    protected List<List<int>> neighbors;
 
     public FluidSim(int numParticles, float mass, float radius, int resolution)
     {
         this.numParticles = numParticles;
         this.mass = mass;
         this.radius = radius;
+        this.radius2 = radius * radius;
         this.resolution = resolution;
+        
+        kernel = new SphStdKernel2D(radius);
 
-        positions = new List<Vector3>(numParticles);
-        velocities = new List<Vector3>(numParticles);
-        forces = new List<Vector3>(numParticles);
+        positions = new List<T>(numParticles);
+        velocities = new List<T>(numParticles);
+        forces = new List<T>(numParticles);
 
-        index = new BucketIndex<Vector3>(radius, resolution, resolution, resolution);
+        index = new BucketIndex<T>(radius, resolution, resolution, resolution);
+        // Excludes itself
+        neighbors = new List<List<int>>(numParticles);
+
+        for (int i = 0; i < numParticles; i++)
+        {
+            neighbors.Add(new List<int>());
+        }
     }
 
     public void step(float deltaTime)
@@ -41,36 +54,23 @@ public class FluidSim
         postStep();
     }
 
+    protected abstract void preStep();
+    protected abstract void accumulateForces(float deltaTime);
+    protected abstract void timeIntegration(float deltaTime);
+    protected abstract void resolveCollisions();
+    protected abstract void postStep();
 
-    private void timeIntegration(float deltaTime)
-    {
-        Parallel.For(0, numParticles, i =>
-        {
-            velocities[i] += deltaTime * forces[i] / mass;
-            positions[i] += deltaTime * velocities[i];
-        });
-    }
+    protected abstract void computePressure();
+    protected abstract void accumulateExternalForces(float deltaTime);
+    protected abstract void accumulateNonPressureForces(float deltaTime);
+    protected abstract void accumulatePressureForces(float deltaTime);
 
-    private void accumulateForces(float deltaTime)
-    {
+    // Samplers are mostly for field querying
+    // Non samplers are for calculating values for particles
 
-    }
-
-    private void resolveCollisions()
-    {
-
-    }
-
-    private void preStep()
-    {
-        for (int i = 0; i < numParticles; i++)
-        {
-            forces[i] = Vector3.zero;
-        }
-    }
-
-    private void postStep()
-    {
-
-    }
+    public abstract float sampleKernelSumAt(T position);
+    public abstract T gradientAt(int i);
+    public abstract T sampleGradientAt(T position);
+    public abstract float laplacianAt(int i);
+    public abstract float sampleLaplacianAt(T position);
 }

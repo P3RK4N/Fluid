@@ -11,19 +11,23 @@ public class KernelPreviewer : Previewer
     bool showDF = true;
 
     [SerializeField]
+    bool showD2F = true;
+
+    [SerializeField]
     float h = 1.4f;
 
-    Kernel k;
+    Kernel<Vector2> k;
 
     protected override void preDraw()
     {
-        k = new SphStdKernel(h);
+        k = new SphStdKernel2D(h);
     }
 
     protected override Color draw(Vector2 coords)
     {
-        float res = k.F(coords.x);
-        float dRes = k.dF(coords.x);
+        float res = k.F(Mathf.Abs(coords.x));
+        float dRes = k.dF(Mathf.Abs(coords.x));
+        float d2Res = k.d2F(Mathf.Abs(coords.x));
 
         Color color = Style.DarkColor;
         if (showF && shouldPlot(coords.y, res))
@@ -34,7 +38,11 @@ public class KernelPreviewer : Previewer
         {
             color.g = 1.0f;
         }
-        if (coords.x == 0.0f || coords.y == 0.0f)
+        if (showD2F && shouldPlot(coords.y, d2Res))
+        {
+            color.b = 1.0f;
+        }
+        if (coords.x == 0.0f || coords.y == 0.0f || Mathf.Abs(coords.y - Mathf.Round(coords.y)) < 0.01f)
         {
             color = Color.white;
         }
