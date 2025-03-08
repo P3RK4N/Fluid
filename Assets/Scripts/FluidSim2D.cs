@@ -1,12 +1,13 @@
 ﻿using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static UnityEngine.UI.Image;
 
 class FluidSim2D : FluidSim<Vector2>
 {
-    public FluidSim2D(int numParticles, float mass, float radius, int resolution, float scale = 1.0f)
-    : base(numParticles, mass, radius, resolution)
+    public FluidSim2D(int numParticles, int resolution, float radius = 0.1F, float mass = 0.001F, float targetDensity = 1000, float speedOfSound = 1482, float eosExponent = 7, float viscosityCoefficient = 1.0f, float scale = 1.0f)
+        : base(numParticles, resolution, radius, mass, targetDensity, speedOfSound, eosExponent, viscosityCoefficient)
     {
         for (int i = 0; i < numParticles; i++)
         {
@@ -17,28 +18,62 @@ class FluidSim2D : FluidSim<Vector2>
         }
     }
 
-#region Forces
+    #region Forces
 
     protected override void accumulateForces(float deltaTime)
     {
-        accumulateNonPressureForces(deltaTime);
+        accumulateViscosityForces(deltaTime);
         accumulatePressureForces(deltaTime);
         accumulateExternalForces(deltaTime);
     }
 
     protected override void accumulateExternalForces(float deltaTime)
     {
-        Debug.Log("External forces");
+        Vector2 g = new Vector2(0, -9.81f);
+        for (int i = 0; i < numParticles; i++)
+        {
+            forces[i] -= mass * g;
+        }
     }
 
     protected override void accumulatePressureForces(float deltaTime)
     {
-        Debug.Log("Pressure forces");
+        for (int i = 0; i < numParticles; i++)
+        {
+            float iDensity2 = densities[i] * densities[i];
+            Vector2 pressureForces = Vector2.zero;
+
+            neighbors[i].ForEach(j =>
+            {
+                float dist = Vector2.Distance(positions[i], positions[j]);
+
+                if (dist > 0.0f)
+                {
+                    float jDensity2 = densities[j] * densities[j];
+                    Vector2 dir = (positions[j] - positions[i]) / dist;
+                    
+                    pressureForces -= (pressures[i] / iDensity2 + pressures[j] / jDensity2) * kernel.grad(dist, dir);
+                }
+            });
+
+            forces[i] += mass2 * pressureForces;
+        }
     }
 
-    protected override void accumulateNonPressureForces(float deltaTime)
+    protected override void accumulateViscosityForces(float deltaTime)
     {
-        Debug.Log("Non pressure forces");
+        for (int i = 0; i < numParticles; i++)
+        {
+            Vector2 viscosityForces = Vector2.zero;
+
+            neighbors[i].ForEach(j =>
+            {
+                float dist = Vector2.Distance(positions[i], positions[j]);
+                viscosityForces += (velocities[j] - velocities[i]) / densities[j] * kernel.d2F(dist);
+            });
+
+            forces[i] += mass2 * viscosityCoefficient * viscosityForces;
+        }
     }
 
 #endregion Forces
@@ -67,6 +102,7 @@ class FluidSim2D : FluidSim<Vector2>
             });
         }
 
+        computeDensities();
         computePressure();
     }
 
@@ -86,9 +122,24 @@ class FluidSim2D : FluidSim<Vector2>
         });
     }
 
+    private void computeDensities()
+    {
+        for (int i = 0; i < numParticles; i++)
+        {
+            densities[i] = mass * sampleKernelSumAt(positions[i]);
+        }
+    }
+
     protected override void computePressure()
     {
-        Debug.Log("Compute pressure");
+        float eosScale = targetDensity * speedOfSound * speedOfSound / eosExponent;
+
+        for (int i = 0; i < numParticles; i++)
+        {
+            pressures[i] = computePressureFromEOS(densities[i], targetDensity, eosScale, eosExponent);
+
+            // TODO: Handle negative pressure;
+        }
     }
 
     public override float sampleKernelSumAt(Vector2 position)
@@ -146,13 +197,37 @@ class FluidSim2D : FluidSim<Vector2>
         return laplacian;
     }
 
+    // TODO
     public override Vector2 gradientAt(int i)
     {
-        throw new System.NotImplementedException();
+        Vector2 grad = Vector2.zero;
+
+        neighbors[i].ForEach(j =>
+        {
+            float distance2 = Vector2.SqrMagnitude(positions[i] - positions[j]);
+            if (distance2 > 0.0f)
+            {
+                float distance = Mathf.Sqrt(distance2);
+                Vector2 dir = (positions[j] - positions[i]) / distance;
+                grad += kernel.grad(distance, dir) / densities[j];
+            }
+        });
+
+        return grad * mass;
     }
 
+    // TODO
     public override float laplacianAt(int i)
     {
-        throw new System.NotImplementedException();
+        float laplacian = 0.0f;
+
+        neighbors[i].ForEach(j =>
+        {
+            float distance = Vector2.Distance(positions[i], positions[j]);
+            Vector2 dir = (positions[j] - positions[i]) / distance;
+            laplacian += kernel.d2F(distance) / densities[j];
+        });
+
+        return laplacian * mass;
     }
 }

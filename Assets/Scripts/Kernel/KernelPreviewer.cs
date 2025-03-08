@@ -5,6 +5,9 @@ using UnityEngine.Experimental.Rendering;
 public class KernelPreviewer : Previewer
 {
     [SerializeField]
+    Kernel.KernelType type = Kernel.KernelType.SphStdKernel;
+
+    [SerializeField]
     bool showF = true;
 
     [SerializeField]
@@ -16,11 +19,19 @@ public class KernelPreviewer : Previewer
     [SerializeField]
     float h = 1.4f;
 
-    Kernel<Vector2> k;
+    Kernel k;
 
     protected override void preDraw()
     {
-        k = new SphStdKernel2D(h);
+        switch (type)
+        {
+            case Kernel.KernelType.SphStdKernel:
+                k = new SphStdKernel(h);
+                break;
+            case Kernel.KernelType.SphSpikyKernel:
+                k = new SphSpikyKernel(h);
+                break;
+        }
     }
 
     protected override Color draw(Vector2 coords)

@@ -24,7 +24,7 @@ public class DensityPreviewer : Previewer
     protected override void preDraw()
     {
         Random.InitState(0);
-        sim = new FluidSim2D(numParticles, 1.0f, radius, 20, scale.x);
+        sim = new FluidSim2D(numParticles, 20, scale: scale.x);
         sim.step(Time.fixedDeltaTime);
     }
 
@@ -32,6 +32,12 @@ public class DensityPreviewer : Previewer
     {
         float t = sim.sampleKernelSumAt(coords);
         return Color.Lerp(Style.DarkColor, Style.LightColor, t);
+    }
+
+    void Update()
+    {
+        radius -= 0.5f * Time.deltaTime;
+        OnValidate();
     }
 
     private void OnDrawGizmos()
@@ -52,7 +58,7 @@ public class DensityPreviewer : Previewer
         }
     }
 
-    protected override Vector2 transformCoords(int x, int y)
+    protected override Vector2 transformCoords(int x, int y) 
     {
         return new Vector2((float)x / resolution.x * scale.x, (float)y / resolution.y * scale.x);
     }
