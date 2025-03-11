@@ -54,9 +54,17 @@ public class BucketIndex<T>
             int elementIndex = indices.w;
             reverseIndex.Remove(id);
 
-            // Swap and pop
+            // Swap and pop in bucket
             bucket[elementIndex] = bucket[bucket.Count - 1];
             bucket.RemoveAt(bucket.Count - 1);
+
+            // Update swapped val indices in reverseIndex
+            if (elementIndex < bucket.Count)
+            {
+                int4 movedVal = reverseIndex[bucket[elementIndex]];
+                movedVal.w = elementIndex;
+                reverseIndex[bucket[elementIndex]] = movedVal;
+            }
         }
     }
 

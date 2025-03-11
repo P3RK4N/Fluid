@@ -4,11 +4,15 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using static UnityEngine.UI.Image;
 
-class FluidSim2D : FluidSim<Vector2>
+public class FluidSim2D : FluidSim<Vector2>
 {
+    private float scale = 1.0f;
+
     public FluidSim2D(int numParticles, int resolution, float radius = 0.1F, float mass = 0.001F, float targetDensity = 1000, float speedOfSound = 1482, float eosExponent = 7, float viscosityCoefficient = 1.0f, float scale = 1.0f)
         : base(numParticles, resolution, radius, mass, targetDensity, speedOfSound, eosExponent, viscosityCoefficient)
     {
+        this.scale = scale;
+
         for (int i = 0; i < numParticles; i++)
         {
             // TODO: Make more robust
@@ -95,7 +99,7 @@ class FluidSim2D : FluidSim<Vector2>
             neighbors[i].Clear();
             index.ForEachNeighbor(positions[i], j =>
             {
-                if (Vector2.SqrMagnitude(positions[i] - positions[j]) < radius2 && i != j)
+                if (Vector2.SqrMagnitude(positions[i] - positions[j]) < kernelRadius2 && i != j)
                 {
                     neighbors[i].Add(j);
                 }
@@ -110,7 +114,43 @@ class FluidSim2D : FluidSim<Vector2>
 
     protected override void resolveCollisions()
     {
-        Debug.Log("Resolving collisions");
+        InverseBoxCollider2D collider = new InverseBoxCollider2D(Vector2.one * 0.5f, scale);
+        float restitutionCoeff = 0.99f;
+        float frictionCoeff = 0.01f;
+        float particleRadius = 0.01f;
+
+        for (int i = 0; i < numParticles; i++)
+        {
+            var result = collider.getClosestPoint(positions[i]);
+
+            if (collider.isPenetrating(positions[i], particleRadius, result))
+            {
+                Vector2 normal = result.normal;
+                Vector2 targetPoint = result.point + kernelRadius * normal;
+
+                // Collider is static
+                Vector2 relativeVel = velocities[i];
+                float normalDotVel = Vector2.Dot(relativeVel, normal);
+                Vector2 relativeN = normal * normalDotVel;
+                Vector2 relativeT = relativeVel - relativeN;
+
+                if (normalDotVel < 0.0)
+                {
+                    Vector2 deltaRelativeVelN = (-restitutionCoeff - 1.0f) * relativeN;
+                    relativeN *= -restitutionCoeff;
+
+                    if (Vector2.SqrMagnitude(relativeT) > 0.0f)
+                    {
+                        float frictionScale = Mathf.Max(1.0f - frictionCoeff * deltaRelativeVelN.magnitude / relativeT.magnitude, 0.0f);
+                        relativeT *= frictionScale;
+                    }
+
+                    velocities[i] = relativeN + relativeT;
+                }
+
+                positions[i] = targetPoint;
+            }
+        }
     }
 
     protected override void timeIntegration(float deltaTime)
@@ -149,7 +189,7 @@ class FluidSim2D : FluidSim<Vector2>
         index.ForEachNeighbor(position, i =>
         {
             float distance2 = Vector2.SqrMagnitude(position - positions[i]);
-            if (distance2 < radius2)
+            if (distance2 < kernelRadius2)
             {
                 sum += kernel.F(Mathf.Sqrt(distance2));
             }
@@ -168,7 +208,7 @@ class FluidSim2D : FluidSim<Vector2>
         index.ForEachNeighbor(position, i =>
         {
             float distance2 = Vector2.SqrMagnitude(position - positions[i]);
-            if (distance2 < radius2 && distance2 > 0.0f)
+            if (distance2 < kernelRadius2 && distance2 > 0.0f)
             {
                 float distance = Mathf.Sqrt(distance2);
                 Vector2 dir = (positions[i] - position) / distance;
@@ -187,7 +227,7 @@ class FluidSim2D : FluidSim<Vector2>
         index.ForEachNeighbor(position, i =>
         {
             float distance2 = Vector2.SqrMagnitude(position - positions[i]);
-            if (distance2 < radius2 && distance2 > 0.0f)
+            if (distance2 < kernelRadius2 && distance2 > 0.0f)
             {
                 float distance = Mathf.Sqrt(distance2);
                 laplacian += kernel.d2F(distance) / sampleKernelSumAt(positions[i]);

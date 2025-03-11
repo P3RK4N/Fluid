@@ -12,8 +12,8 @@ public abstract class FluidSim<T>
     protected float speedOfSound;
     protected float eosExponent;
     protected float viscosityCoefficient;
-    protected float radius;
-    protected float radius2;
+    protected float kernelRadius;
+    protected float kernelRadius2;
     protected int resolution;
     protected Kernel kernel;
 
@@ -37,11 +37,11 @@ public abstract class FluidSim<T>
         this.speedOfSound = speedOfSound;
         this.eosExponent = eosExponent;
         this.viscosityCoefficient = viscosityCoefficient;
-        this.radius = radius;
-        this.radius2 = radius * radius;
+        this.kernelRadius = radius;
+        this.kernelRadius2 = radius * radius;
         this.resolution = resolution;
         
-        kernel = new SphStdKernel(radius);
+        kernel = new SphSpikyKernel(radius);
 
         positions = new List<T>(numParticles);
         velocities = new List<T>(numParticles);
@@ -67,9 +67,14 @@ public abstract class FluidSim<T>
 
         accumulateForces(deltaTime);
         timeIntegration(deltaTime);
-        resolveCollisions();
+        //resolveCollisions();
 
         postStep();
+    }
+
+    public List<T> getPositions()
+    {
+        return positions;
     }
 
     protected abstract void preStep();

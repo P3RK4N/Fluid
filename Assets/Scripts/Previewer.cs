@@ -5,10 +5,10 @@ using UnityEngine;
 public abstract class Previewer : MonoBehaviour
 {
     [SerializeField]
-    protected Vector2Int resolution = new(400, 400);
+    public Vector2Int resolution = new(400, 400);
 
     [SerializeField]
-    protected Vector2 scale = new(4, 1);
+    public Vector2 scale = new(4, 1);
 
     protected void OnValidate()
     {
