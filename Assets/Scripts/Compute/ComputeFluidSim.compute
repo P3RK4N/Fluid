@@ -43,6 +43,7 @@ float particleMass;
 float restitutionCoeff;
 float targetDensity;
 float pressureCoeff;
+float gravityCoeff;
 float kernelRadius;
 float kernelRadius2;
 float kernelRadius3;
@@ -104,7 +105,7 @@ struct Spiky
         return 90.0f / (PI * kernelRadius5) * x;
     }
     
-    float grad(float dist, float2 normalizedDirToCenter)
+    float2 grad(float dist, float2 normalizedDirToCenter)
     {
         return -dF(dist) * normalizedDirToCenter;
     }
@@ -186,9 +187,46 @@ float getPressureFromDensity(float density)
     return pressureCoeff * diff;
 }
 
-void computePressures(int i)
+float getPressureFromDensity(float density1, float density2)
 {
+    float diff1 = density1 - targetDensity;
+    float diff2 = density2 - targetDensity;
+    return 0.5f * pressureCoeff * (diff1 + diff2);
+}
 
+void computePressureForce(int i)
+{
+    float2 pressureForce = (float2) 0;
+    
+    for (int j = 0; j < numParticles; j++)
+    {
+        if (i == j)
+            continue;
+        
+        float len = distance(positions[j], positions[i]);
+        
+        float2 ndir = (positions[j] - positions[i]);
+        
+        if (len > 0.0f)
+            ndir /= len;
+        else
+            ndir = normalize(rand(float2(i, j)));
+
+        float2 grad = SpikyParticleKernel.grad(len, ndir);
+        pressureForce += getPressureFromDensity(densities[i], densities[j]) * grad / densities[j];
+    }
+
+    forces[i] += - pressureForce * particleMass / densities[i];
+}
+
+void computeViscosityForce(int i)
+{
+    
+}
+
+void computeExternalForce(int i)
+{
+    forces[i] += float2(0.0f, gravityCoeff);
 }
 
 void preStep(uint i)
@@ -196,15 +234,13 @@ void preStep(uint i)
     // Reset forces
     forces[i] = 0.0f;
     
+    
     // Update index
     
     // Recalculate neighbors
     
     // Compute densities
     computeDensities(i);
-    
-    // Compute pressures
-    computePressures(i);
 }
 
 /*
@@ -231,12 +267,12 @@ void Particle(uint3 id : SV_DispatchThreadID)
     {
         if (distance(tcoords, positions[i]) < particleRadius)
         {
-            result[coords.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
+            result[coords.xy] = float4(0.0f, 1.0f, 1.0f, 1.0f);
             return;
         }
     }
 
-    result[coords.xy] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    // result[coords.xy] = float4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 [numthreads(X, 1, 1)]
@@ -284,7 +320,7 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     float4 zero = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 pos = float4(0.0f, 0.0f, 1.0f, 1.0f);
     
-    result[coords.xy] = pressure < 0.0f ? smoothstep(zero, neg, -pressure) : smoothstep(zero, pos, pressure);
+    result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 10.0f) : lerp(zero, pos, pressure * 10.0f);
 }
 
 
@@ -311,10 +347,17 @@ void Step(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
     
+    float2 prevPos = positions[id.x];
+    
     preStep(id.x);
     
-    velocities[id.x] += float2(0, -9.81)  * deltaTime;
-    positions[id.x] += velocities[id.x] * deltaTime;
+    computePressureForce(id.x);
+    computeViscosityForce(id.x);
+    computeExternalForce(id.x);
+    
+    float deltaTime = 0.001f;
+    velocities[id.x] += forces[id.x]  * deltaTime;
+    positions[id.x] = prevPos + velocities[id.x] * deltaTime;
     
     resolveCollisions(id.x);
 }

@@ -585,7 +585,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1949939948219821456, guid: 4e4cab709e32f13428a87e0858a58c13, type: 3}
       propertyPath: pressureCoeff
-      value: 0.1
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1949939948219821456, guid: 4e4cab709e32f13428a87e0858a58c13, type: 3}
       propertyPath: targetDensity

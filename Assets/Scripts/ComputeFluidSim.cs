@@ -17,6 +17,7 @@ public class ComputePreviewer : MonoBehaviour
     public float particleMass = 0.001f;
     public float targetDensity = 1000.0f;
     public float pressureCoeff = 1.0f;
+    public float gravityCoeff = -9.81f;
     public float kernelRadius = 0.1f;
     public float restitutionCoeff = 0.99f;
 
@@ -88,6 +89,7 @@ public class ComputePreviewer : MonoBehaviour
         computeShader.SetFloat("particleMass", particleMass);
         computeShader.SetFloat("targetDensity", targetDensity);
         computeShader.SetFloat("pressureCoeff", pressureCoeff);
+        computeShader.SetFloat("gravityCoeff", gravityCoeff);
         computeShader.SetVector("offset", offset);
         computeShader.SetFloat("deltaTime", Time.deltaTime);
 
@@ -113,6 +115,25 @@ public class ComputePreviewer : MonoBehaviour
         DispatchStep();
         DispatchDraw();
         DisplayStats();
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!Application.isPlaying) return;
+
+        Vector2[] positions = new Vector2[10];
+        Vector2[] forces = new Vector2[10];
+
+        positionBuffer.GetData(positions);
+        forceBuffer.GetData(forces);
+
+        for (int i = 0; i < forces.Length; i++)
+        {
+            var worldPos = transform.TransformPoint(positions[i]) + Vector3.back * 0.05f;
+            var worldDir = transform.TransformDirection(forces[i]);
+            Gizmos.DrawSphere(worldPos, 0.01f);
+            Gizmos.DrawLine(worldPos, worldPos + worldDir * 0.1f);
+        }
     }
 
     private void DisplayStats()
@@ -175,6 +196,7 @@ public class ComputePreviewer : MonoBehaviour
         if (computeShader == null || renderTexture == null) return;
 
         computeShader.Dispatch((int)drawKernel, Mathf.CeilToInt((float)(resolution.x * resolution.y) / X), 1, 1);
+        computeShader.Dispatch((int)DrawKernel.Particle, Mathf.CeilToInt((float)(resolution.x * resolution.y) / X), 1, 1);
     }
 
     void DispatchRandomInit()
