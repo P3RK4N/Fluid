@@ -58,6 +58,7 @@ float kernelRadius4;
 float kernelRadius5;
 
 RWStructuredBuffer<float2> positions;
+RWStructuredBuffer<float2> predictedPositions;
 RWStructuredBuffer<float2> velocities;
 RWStructuredBuffer<float2> forces;
 RWStructuredBuffer<float> densities;
@@ -87,8 +88,8 @@ struct Spiky
             return 0.0f;
         }
         
-        float x = 1.0f - dist / kernelRadius;
-        return 15.0f / (PI * kernelRadius3) * x * x * x;
+        float volume = PI * kernelRadius4 / 6;
+        return (kernelRadius - dist) * (kernelRadius - dist) / volume;
     }
     
     float dF(float dist)
@@ -98,8 +99,8 @@ struct Spiky
             return 0;
         }
 
-        float x = 1.0f - dist / kernelRadius;
-        return -45.0f / (PI * kernelRadius4) * x * x;
+        float scale = 12 / (kernelRadius4 * PI);
+        return (dist - kernelRadius) * scale;
     }
     
     float ddF(float dist)
@@ -109,13 +110,14 @@ struct Spiky
             return 0;
         }
 
-        float x = 1.0f - dist / kernelRadius;
-        return 90.0f / (PI * kernelRadius5) * x;
+        float volume = PI * kernelRadius4 * kernelRadius4 / 4;
+        float x = max(0, kernelRadius2 - dist * dist);
+        return x * x * x / volume;
     }
     
     float2 grad(float dist, float2 normalizedDirToCenter)
     {
-        return -dF(dist) * normalizedDirToCenter;
+        return dF(dist) * normalizedDirToCenter;
     }
 };
 
@@ -177,7 +179,7 @@ float sampleKernelAt(float2 pos)
     
     for (int i = 0; i < numParticles; i++)
     {
-        sum += SpikyParticleKernel.F(distance(pos, positions[i]));
+        sum += SpikyParticleKernel.F(distance(pos, predictedPositions[i]));
     }
     
     return sum;
@@ -185,7 +187,7 @@ float sampleKernelAt(float2 pos)
 
 void computeDensities(uint i)
 {
-    densities[i] = particleMass * sampleKernelAt(positions[i]);
+    densities[i] = particleMass * sampleKernelAt(predictedPositions[i]);
     InterlockedMax(stats[0], (int) (densities[i] * 1000));
 }
 
@@ -211,17 +213,17 @@ void computePressureForce(int i)
         if (i == j)
             continue;
         
-        float len = distance(positions[j], positions[i]);
-        
-        float2 ndir = (positions[j] - positions[i]);
-        
-        if (len > 0.0f)
+        // Get direction and magnitude
+        float len = distance(predictedPositions[j], predictedPositions[i]);
+        float2 ndir = (predictedPositions[j] - predictedPositions[i]);
+        if (len > 0.00001f)
             ndir /= len;
         else
             ndir = normalize(rand(float2(i, j)));
 
+        
         float2 grad = SpikyParticleKernel.grad(len, ndir);
-        float pressure = -getPressureFromDensity(densities[i], densities[j]);
+        float pressure = getPressureFromDensity(densities[i], densities[j]);
         
         pressureForce += pressure * grad / densities[j];
     }
@@ -238,11 +240,11 @@ void computeViscosityForce(int i)
         if (i == j)
             continue;
         
-        float len = distance(positions[j], positions[i]);
-        viscosityForce += (velocities[j] - velocities[i]) / densities[j] * SpikyParticleKernel.ddF(len);
+        float len = distance(predictedPositions[j], predictedPositions[i]);
+        viscosityForce += (velocities[j] - velocities[i]) * SpikyParticleKernel.ddF(len);
     }
 
-    forces[i] += particleMass * particleMass * viscosityCoeff * viscosityForce / densities[i];
+    forces[i] += viscosityCoeff * viscosityForce;
 }
 
 void interactionForce(int i)
@@ -261,28 +263,12 @@ void interactionForce(int i)
     }
     
     float val = 1 - dist / pointerRadius;
-    forces[i] += (dir * pointerStrength - velocities[i]) * val;
-}
-
-void computeExternalForce(int i)
-{
-    forces[i] += float2(0.0f, gravityCoeff);
-
-    interactionForce(i);
+    velocities[i] += (dir * pointerStrength - velocities[i]) * val * fixedDeltaTime;
 }
 
 void preStep(uint i)
 {
-    // Reset forces
-    forces[i] = 0.0f;
-    
-    
-    // Update index
-    
-    // Recalculate neighbors
-    
-    // Compute densities
-    computeDensities(i);
+
 }
 
 /*
@@ -395,15 +381,19 @@ void PreStep(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
     
+    // Predict
+    float2 prevPos = positions[id.x];
+    velocities[id.x] += float2(0, gravityCoeff) * fixedDeltaTime;
+    predictedPositions[id.x] += velocities[id.x] * fixedDeltaTime;
+    
     // Reset forces
     forces[id.x] = 0.0f;
+    
     
     // Update index
     
     // Recalculate neighbors
     
-    // Compute densities
-    computeDensities(id.x);
 }
 
 [numthreads(X, 1, 1)]
@@ -415,12 +405,21 @@ void Step(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
     
+    // Compute densities
+    computeDensities(id.x);
+    
+    // Calculate forces
     computePressureForce(id.x);
     computeViscosityForce(id.x);
-    computeExternalForce(id.x);
     
+    // Misc
+    interactionForce(id.x);
+    
+    // Integration
     velocities[id.x] += forces[id.x] * fixedDeltaTime;
     positions[id.x] += velocities[id.x] * fixedDeltaTime;
     
+    
+    // Recolving collisions
     resolveCollisions(id.x);
 }

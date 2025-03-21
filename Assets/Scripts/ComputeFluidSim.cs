@@ -3,11 +3,13 @@ using TMPro;
 using UnityEngine;
 using System.Linq;
 using System.Runtime.InteropServices;
+using UnityEngine.InputSystem;
+using UnityEditor;
 
 public class ComputePreviewer : MonoBehaviour
 {
     public static readonly int X = 1024;
-
+    
     public ComputeShader computeShader;
     public DrawKernel drawKernel;
 
@@ -17,15 +19,18 @@ public class ComputePreviewer : MonoBehaviour
     public float particleMass = 0.001f;
     public float targetDensity = 1000.0f;
     public float pressureCoeff = 1.0f;
+    public float viscosityCoeff = 1.0f;
     public float gravityCoeff = -9.81f;
     public float kernelRadius = 0.1f;
     public float restitutionCoeff = 0.99f;
 
-    public float scale = 1.0f;
+    public float scale = 1.0f; 
+    public float pointerRadius = 0.3f;
+    public float pointerStrength = 1.0f;
     public Vector2 offset = Vector2.zero;
 
     private RenderTexture renderTexture;
-    private ComputeBuffer positionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
+    private ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
     public enum DrawKernel
     {
@@ -38,6 +43,7 @@ public class ComputePreviewer : MonoBehaviour
     {
         RandomInit = 3,
         Step,
+        PreStep,
     }
 
     int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -54,6 +60,7 @@ public class ComputePreviewer : MonoBehaviour
     private void InitializeBuffers()
     {
         positionBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
+        predictedPositionBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
         velocityBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
         forceBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
         densityBuffer = new ComputeBuffer(numParticles, sizeof(float));
@@ -63,6 +70,7 @@ public class ComputePreviewer : MonoBehaviour
         for (int k = 0; k < Enum.GetValues(typeof(ComputeKernel)).Length + Enum.GetValues(typeof(DrawKernel)).Length; k++)
         {
             computeShader.SetBuffer(k, "positions", positionBuffer);
+            computeShader.SetBuffer(k, "predictedPositions", predictedPositionBuffer);
             computeShader.SetBuffer(k, "velocities", velocityBuffer);
             computeShader.SetBuffer(k, "forces", forceBuffer);
             computeShader.SetBuffer(k, "densities", densityBuffer);
@@ -89,9 +97,13 @@ public class ComputePreviewer : MonoBehaviour
         computeShader.SetFloat("particleMass", particleMass);
         computeShader.SetFloat("targetDensity", targetDensity);
         computeShader.SetFloat("pressureCoeff", pressureCoeff);
+        computeShader.SetFloat("viscosityCoeff", viscosityCoeff);
         computeShader.SetFloat("gravityCoeff", gravityCoeff);
         computeShader.SetVector("offset", offset);
         computeShader.SetFloat("deltaTime", Time.deltaTime);
+        computeShader.SetBool("pointerActive", Input.GetMouseButton(0));
+        computeShader.SetFloat("pointerRadius", pointerRadius);
+        computeShader.SetFloat("pointerStrength", pointerStrength);
 
         float kr2 = kernelRadius * kernelRadius;
         float kr3 = kr2 * kernelRadius;
@@ -134,17 +146,23 @@ public class ComputePreviewer : MonoBehaviour
             Gizmos.DrawSphere(worldPos, 0.01f);
             Gizmos.DrawLine(worldPos, worldPos + worldDir * 0.1f);
         }
+
+        if (Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out RaycastHit hit, 3.0f))
+        {
+            computeShader.SetVector("pointerPos", inverseTransform(hit.point));
+        }
+
     }
 
     private void DisplayStats()
     {
         statsBuffer.GetData(stats);
-        Debug.Log
-        (
-            $"Max density: {stats[0] / 1000.0f}\n" +
-            $"Min Pressure: {stats[1] / 1000.0f}\n" +
-            $"Max pressure: {stats[2] / 1000.0f}\n"
-        );
+        //Debug.Log
+        //(
+        //    $"Max density: {stats[0] / 1000.0f}\n" +
+        //    $"Min Pressure: {stats[1] / 1000.0f}\n" +
+        //    $"Max pressure: {stats[2] / 1000.0f}\n"
+        //);
 
         for (int i = 0; i < stats.Length; i++) stats[i] = 0;
         statsBuffer.SetData(stats);
@@ -182,9 +200,15 @@ public class ComputePreviewer : MonoBehaviour
         return (normalizedPos + offset) * scale;
     }
 
+    public Vector2 inverseTransform(Vector3 worldPos)
+    {
+        return transform.InverseTransformPoint(worldPos);
+    }
+
     private void OnDestroy()
     {
         positionBuffer.Release();
+        predictedPositionBuffer.Release();
         velocityBuffer.Release();
         forceBuffer.Release();
         densityBuffer.Release();
@@ -210,6 +234,7 @@ public class ComputePreviewer : MonoBehaviour
     {
         if (computeShader == null || renderTexture == null) return;
 
+        computeShader.Dispatch((int)ComputeKernel.PreStep, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
         computeShader.Dispatch((int)ComputeKernel.Step, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
     }
 }
