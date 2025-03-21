@@ -1,9 +1,5 @@
 // Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel Particle
-#pragma kernel Density
-#pragma kernel Pressure
-
-#pragma kernel RandomInit
+#pragma kernel Draw
 #pragma kernel Step
 #pragma kernel PreStep
 
@@ -35,8 +31,8 @@ struct BlockIndex
     ################################
 */
 
-float scale;
-float2 offset;
+static float2 scale = float2(2.0f, 1.0f);
+static float2 offset = float2(-0.5, -0.5);
 
 bool pointerActive = 0;
 float pointerRadius = 0.3f;
@@ -67,10 +63,10 @@ RWStructuredBuffer<uint> reverseIndex;
 
 RWTexture2D<float4> result;
 
-RWStructuredBuffer<int> stats;
+RWStructuredBuffer<int> stats; 
 
 float deltaTime;
-static float fixedDeltaTime = 0.005f;
+static float fixedDeltaTime = 1 / 1000.0f;
 
 /*
     ################################
@@ -120,7 +116,7 @@ struct Spiky
 };
 
 Spiky SpikyParticleKernel;
-
+ 
 /*
     ################################
     ############ UTIL ##############
@@ -152,18 +148,19 @@ float magnitude2(float2 a)
 
 void resolveCollisions(uint i)
 {
-    float halfBound = 0.5f - particleRadius;
+    float halfBoundX = 1.0f - particleRadius;
+    float halfBoundY = 0.5f - particleRadius;
     float2 pos = positions[i];
     float2 vel = velocities[i];
     
-    if (abs(pos.x) > halfBound)
+    if (abs(pos.x) > halfBoundX)
     {
-        pos.x = halfBound * sign(pos.x);
+        pos.x = halfBoundX * sign(pos.x);
         vel.x *= -1 * restitutionCoeff;
     }
-    if (abs(pos.y) > halfBound)
+    if (abs(pos.y) > halfBoundY)
     {
-        pos.y = halfBound * sign(pos.y);
+        pos.y = halfBoundY * sign(pos.y);
         vel.y *= -1 * restitutionCoeff;
     }
  
@@ -239,7 +236,7 @@ void computeViscosityForce(int i)
             continue;
         
         float len = distance(positions[j], positions[i]);
-        viscosityForce += (velocities[j] - velocities[i]) / densities[j] * SpikyParticleKernel.ddF(len);
+        viscosityForce += (velocities[j] - velocities[i]) * SpikyParticleKernel.ddF(len) / densities[j];
     }
 
     forces[i] += particleMass * particleMass * viscosityCoeff * viscosityForce / densities[i];
@@ -291,60 +288,8 @@ void preStep(uint i)
     ################################
 */
 
-[numthreads(X,1,1)]
-void Particle(uint3 id : SV_DispatchThreadID)
-{
-    uint w, h;
-    result.GetDimensions(w, h);
-    uint total = w * h;
-    
-    if (id.x >= total)
-        return;
-    
-    uint2 coords = uint2(id.x / h, id.x % h);
-    float2 ncoords = float2((float) coords.x / w, (float) coords.y / h);
-    float2 tcoords = transform(ncoords);
-    
-    if (distance(distance(pointerPos, tcoords), pointerRadius) < 0.001f)
-    {
-        result[coords.xy] = float4(0, 1, 0, 1);
-        return;
-    }
-    
-    for (int i = 0; i < numParticles; i++)
-    {
-        if (distance(tcoords, positions[i]) < particleRadius)
-        {
-            float v = length(velocities[i]) * 2.0f;
-            float3 color = lerp(float3(0.24, 0.35, 0.99), lerp(float3(0, 0.76, 1), lerp(float3(0, 0.9, 0.46), lerp(float3(0.96, 0.82, 0.25), float3(1, 0.34, 0.2), v), v), v), v);
-            result[coords.xy] = float4(color, 1.0f);
-            return;
-        }
-    }
-}
-
 [numthreads(X, 1, 1)]
-void Density(uint3 id : SV_DispatchThreadID)
-{
-    uint w, h;
-    result.GetDimensions(w, h);
-    uint total = w * h;
-    
-    if (id.x >= total)
-        return;
-    
-    uint2 coords = uint2(id.x / h, id.x % h);
-    float2 ncoords = float2((float) coords.x / w, (float) coords.y / h);
-    float2 tcoords = transform(ncoords);
-    
-    float density = particleMass * sampleKernelAt(tcoords);
-    InterlockedMax(stats[0], (int) (density * 1000));
-    
-    result[coords.xy] = float4(density, density, 0.0f, 1.0f);
-}
-
-[numthreads(X, 1, 1)]
-void Pressure(uint3 id : SV_DispatchThreadID)
+void Draw(uint3 id : SV_DispatchThreadID)
 {
     uint w, h;
     result.GetDimensions(w, h);
@@ -360,30 +305,36 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     float density = particleMass * sampleKernelAt(tcoords);
     float pressure = getPressureFromDensity(density);
     
+    // Gather some stats
+    InterlockedMax(stats[0], (int) (density * 1000));
     InterlockedMin(stats[1], (int) (pressure * 1000));
     InterlockedMax(stats[2], (int) (pressure * 1000));
     
+    // Draw interactable circle
+    if (distance(distance(pointerPos, tcoords), pointerRadius) < 0.001f)
+    {
+        result[coords.xy] = float4(0, 1, 0, 1);
+        return;
+    }
     
+    // Draw Particles
+    for (int i = 0; i < numParticles; i++)
+    {
+        if (distance(tcoords, positions[i]) < particleRadius)
+        {
+            float v = length(velocities[i]) * 2.0f;
+            float3 color = lerp(float3(0.24, 0.35, 0.99), lerp(float3(0, 0.76, 1), lerp(float3(0, 0.9, 0.46), lerp(float3(0.96, 0.82, 0.25), float3(1, 0.34, 0.2), v), v), v), v);
+            result[coords.xy] = float4(color, 1.0f);
+            result[coords.xy] = float4(0,0,0, 1.0f);
+            return;
+        }
+    }
+    
+    // Draw Pressure
     float4 neg = float4(1.0f, 0.0f, 0.0f, 1.0f);
     float4 zero = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 pos = float4(0.0f, 0.0f, 1.0f, 1.0f);
-    
     result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 0.1f) : lerp(zero, pos, pressure * 0.1f);
-}
-
-
-[numthreads(X, 1, 1)]
-void RandomInit(uint3 id : SV_DispatchThreadID)
-{
-    uint x, _;
-    positions.GetDimensions(x, _);
-
-    if (id.x >= x)
-        return;
-    
-    positions[id.x] = transform(rand(id.xx));
-    velocities[id.x] = (float2)0;
-    forces[id.x] = (float2)0;
 }
 
 [numthreads(X, 1, 1)]
