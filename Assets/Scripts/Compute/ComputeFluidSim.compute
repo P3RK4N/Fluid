@@ -6,16 +6,22 @@
 #define X 1024
 #define PI 3.14159265359f
 
+// Just in case
 #if defined(DISABLE_3D) && defined(ENABLE_3D)
 #   error "Cannot enable both macros!"
 #endif
 
+// Define dimension
 #ifdef DISABLE_3D
 #   define vec float2
 #elif defined(ENABLE_3D) 
 #   define vec float3
 #endif
 
+// Remove intellisense errors
+#ifndef vec
+#   define vec float2
+#endif
 
 /*
     ################################
@@ -42,9 +48,6 @@ struct BlockIndex
     ################################
 */
 
-static float3 scale = float3(2.0f, 1.0f, 2.0f);
-static float3 offset = float3(-0.5f, -0.5f, -0.5f);
-
 bool pointerActive = 0;
 float pointerRadius = 0.3f;
 float pointerStrength = 1.0f;
@@ -63,6 +66,10 @@ float kernelRadius2;
 float kernelRadius3;
 float kernelRadius4;
 float kernelRadius5;
+
+float4x4 trMat;
+float4x4 trMatInv;
+float3 scale;
 
 RWStructuredBuffer<vec> positions;
 RWStructuredBuffer<vec> velocities;
@@ -142,11 +149,6 @@ float3 rand(float3 p3)
 
 }
 
-vec transform(vec x)
-{
-    return (x + offset) * scale;
-}
-
 float magnitude2(vec a)
 {
     return dot(a, a);
@@ -171,33 +173,30 @@ float3 to_float3(float3 val)
 void resolveCollisions(uint i)
 {
     float3 halfBound = float3(.5f, .5f, .5f) * scale - particleRadius;
-
-    // Reduce volume (cause of curse of dimensionality)
-#ifdef ENABLE_3D
-    halfBound *= 0.25f;
-#endif
     
     float3 pos = to_float3(positions[i]);
+    float3 local_pos = mul(trMatInv, float4(pos, 1.0f)).xyz;
     float3 vel = to_float3(velocities[i]);
+    float3 local_vel = mul((float3x3) trMatInv, vel);
 
-    if (abs(pos.x) > halfBound.x)
+    if (abs(local_pos.x) > halfBound.x)
     {
-        pos.x = halfBound.x * sign(pos.x);
-        vel.x *= -1 * restitutionCoeff;
+        local_pos.x = halfBound.x * sign(local_pos.x);
+        local_vel.x *= -1 * restitutionCoeff;
     }
-    if (abs(pos.y) > halfBound.y)
+    if (abs(local_pos.y) > halfBound.y)
     {
-        pos.y = halfBound.y * sign(pos.y);
-        vel.y *= -1 * restitutionCoeff;
+        local_pos.y = halfBound.y * sign(local_pos.y);
+        local_vel.y *= -1 * restitutionCoeff;
     }
-    if (abs(pos.z) > halfBound.z)
+    if (abs(local_pos.z) > halfBound.z)
     {
-        pos.z = halfBound.z * sign(pos.z);
-        vel.z *= -1 * restitutionCoeff;
+        local_pos.z = halfBound.z * sign(local_pos.z);
+        local_vel.z *= -1 * restitutionCoeff;
     }
     
-    positions[i] = pos;
-    velocities[i] = vel;
+    positions[i] = mul(trMat, float4(local_pos, 1.0f));
+    velocities[i] = mul((float3x3) trMat, local_vel);
 }
 
 float sampleKernelAt(vec pos)

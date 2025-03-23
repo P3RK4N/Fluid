@@ -61,20 +61,22 @@ public class ComputeFluidSim : MonoBehaviour
 
     private void InitializePositions()
     {
-        float width = 0.75f;
-        float halfWidth = width / 2;
+        float preferred_width = 1.0f;
+        Vector3 width = new Vector3(Mathf.Min(preferred_width, transform.localScale.x), Mathf.Min(preferred_width, transform.localScale.y), Mathf.Min(preferred_width, transform.localScale.z));
+        Vector3 halfWidth = width / 2.0f;
+        var mat = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
 
         // For 2D
         if (dimension == Dimension.Dimension2D)
         {
             Vector2[] initialPositions = new Vector2[numParticles];
             int rowSize = Mathf.CeilToInt(Mathf.Sqrt((float)numParticles));
-            float spacing = width / rowSize;
+            Vector3 spacing = width / rowSize;
             for (int i = 0; i < numParticles; i++)
             {
                 int x = i / rowSize;
                 int y = i % rowSize;
-                initialPositions[i] = new Vector2(spacing * x - halfWidth, spacing * y - halfWidth);
+                initialPositions[i] = new Vector2(spacing.x * x - halfWidth.x, spacing.x * y - halfWidth.x);
             }
             positionBuffer.SetData(initialPositions);
         }
@@ -84,13 +86,13 @@ public class ComputeFluidSim : MonoBehaviour
             Vector3[] initialPositions = new Vector3[numParticles];
             int rowSize = Mathf.CeilToInt(Mathf.Pow((float)numParticles, 1.0f / 3.0f));
             int sliceSize = rowSize * rowSize;
-            float spacing = 0.5f / rowSize;
+            Vector3 spacing = width / rowSize;
             for (int i = 0; i < numParticles; i++)
             {
                 int x = i / sliceSize;
                 int y = (i % sliceSize) / rowSize;
                 int z = i % rowSize;
-                initialPositions[i] = new Vector3(spacing * x - halfWidth, spacing * y - halfWidth, spacing * z - halfWidth);
+                initialPositions[i] = mat * new Vector3(spacing.x * x - halfWidth.x, spacing.y * y - halfWidth.y, spacing.z * z - halfWidth.z);
             }
             positionBuffer.SetData(initialPositions);
         }
@@ -131,6 +133,9 @@ public class ComputeFluidSim : MonoBehaviour
         cs.SetFloat("viscosityCoeff", viscosityCoeff);
         cs.SetFloat("gravityCoeff", gravityCoeff);
         cs.SetFloat("deltaTime", Time.deltaTime);
+        cs.SetMatrix("trMat", Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one));
+        cs.SetMatrix("trMatInv", Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one).inverse);
+        cs.SetVector("scale", transform.localScale);
 
         float kr2 = kernelRadius * kernelRadius;
         float kr3 = kr2 * kernelRadius;

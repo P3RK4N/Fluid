@@ -9,28 +9,31 @@ public class ComputeFluidInstancedRenderer3D : MonoBehaviour
 
     ComputeFluidSim sim;
 
+    RenderParams rp;
+    BoxCollider collider;
+
     void Awake()
     {
         sim = GetComponent<ComputeFluidSim>();
+        collider = GetComponent<BoxCollider>();
+
+        rp = new RenderParams(mat);
+        rp.matProps = new MaterialPropertyBlock();
     }
 
     void Start()
     {
-        mat.SetBuffer("positions", sim.positionBuffer);
+        rp.matProps.SetBuffer("positions", sim.positionBuffer);
     }
 
-    void OnRenderObject()
+    void Update()
     {
         if (sim == null) return;
         Debug.Assert(sim.dimension == Dimension.Dimension3D, "Invalid dimension for instanced renderer!");
 
-        mat.SetFloat("_ParticleRadius", sim.particleRadius);
-        mat.SetVector("_WorldPos", transform.position);
-        Graphics.DrawMeshInstancedProcedural(mesh, 0, mat, mesh.bounds, sim.numParticles);
-    }
+        rp.matProps.SetFloat("_ParticleRadius", sim.particleRadius);
+        rp.worldBounds = collider.bounds;
 
-    private void OnDrawGizmos()
-    {
-        Gizmos.DrawWireCube(transform.position, transform.localScale);
+        Graphics.RenderMeshPrimitives(rp, mesh, 0, sim.numParticles);
     }
 }

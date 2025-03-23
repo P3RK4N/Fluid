@@ -30,7 +30,6 @@
                 CBUFFER_START(UnityPerMaterial)
                 float4 _Color;
                 float _ParticleRadius;
-                float3 _WorldPos;
                 CBUFFER_END
             
                 StructuredBuffer<float3> positions;
@@ -39,8 +38,8 @@
                 {
                     Varyings o;
                     
-                    float4 positionWS = v.positionOS * _ParticleRadius + float4(positions[instanceID] + _WorldPos, 0.0f);
-                    o.positionCS = TransformObjectToHClip(positionWS);
+                    float4 positionWS = v.positionOS * _ParticleRadius + float4(positions[instanceID], 1.0f);
+                    o.positionCS = TransformWorldToHClip(positionWS);
                     o.normalWS = TransformObjectToWorldNormal(v.normalOS);
                     return o;
                 }
