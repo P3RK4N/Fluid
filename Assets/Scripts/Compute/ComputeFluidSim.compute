@@ -1,10 +1,21 @@
-// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel Draw
 #pragma kernel Step
 #pragma kernel PreStep
 
+#pragma multi_compile DISABLE_3D ENABLE_3D
+
 #define X 1024
 #define PI 3.14159265359f
+
+#if defined(DISABLE_3D) && defined(ENABLE_3D)
+#   error "Cannot enable both macros!"
+#endif
+
+#ifdef DISABLE_3D
+#   define vec float2
+#elif defined(ENABLE_3D) 
+#   define vec float3
+#endif
+
 
 /*
     ################################
@@ -31,19 +42,19 @@ struct BlockIndex
     ################################
 */
 
-static float2 scale = float2(2.0f, 1.0f);
-static float2 offset = float2(-0.5, -0.5);
+static float3 scale = float3(2.0f, 1.0f, 2.0f);
+static float3 offset = float3(-0.5f, -0.5f, -0.5f);
 
 bool pointerActive = 0;
 float pointerRadius = 0.3f;
 float pointerStrength = 1.0f;
-float2 pointerPos = float2(-10000, -10000);
+float3 pointerPos;
 
 int numParticles;
 float particleRadius;
 float particleMass;
 float restitutionCoeff;
-float targetDensity;
+float targetDensity; 
 float pressureCoeff;
 float viscosityCoeff;
 float gravityCoeff;
@@ -53,9 +64,9 @@ float kernelRadius3;
 float kernelRadius4;
 float kernelRadius5;
 
-RWStructuredBuffer<float2> positions;
-RWStructuredBuffer<float2> velocities;
-RWStructuredBuffer<float2> forces;
+RWStructuredBuffer<vec> positions;
+RWStructuredBuffer<vec> velocities;
+RWStructuredBuffer<vec> forces;
 RWStructuredBuffer<float> densities;
 
 RWStructuredBuffer<BlockIndex> blockIndex;
@@ -109,7 +120,7 @@ struct Spiky
         return 90.0f / (PI * kernelRadius5) * x;
     }
     
-    float2 grad(float dist, float2 normalizedDirToCenter)
+    vec grad(float dist, vec normalizedDirToCenter)
     {
         return -dF(dist) * normalizedDirToCenter;
     }
@@ -123,21 +134,32 @@ Spiky SpikyParticleKernel;
     ################################
 */
 
-float2 rand(float2 p)
+float3 rand(float3 p3)
 {
-    float3 p3 = frac(float3(p.xyx) * float3(.1031, .1030, .0973));
-    p3 += dot(p3, p3.yzx + 33.33);
-    return frac((p3.xx + p3.yz) * p3.zy);
+    p3 = frac(p3 * float3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yxz + 33.33);
+    return frac((p3.xxy + p3.yxx) * p3.zyx);
+
 }
 
-float2 transform(float2 x)
+vec transform(vec x)
 {
     return (x + offset) * scale;
 }
 
-float magnitude2(float2 a)
+float magnitude2(vec a)
 {
     return dot(a, a);
+}
+
+float3 to_float3(float2 val)
+{
+    return float3(val, 0.0f);
+}
+
+float3 to_float3(float3 val)
+{
+    return val;
 }
 
 /*
@@ -148,27 +170,37 @@ float magnitude2(float2 a)
 
 void resolveCollisions(uint i)
 {
-    float halfBoundX = 1.0f - particleRadius;
-    float halfBoundY = 0.5f - particleRadius;
-    float2 pos = positions[i];
-    float2 vel = velocities[i];
+    float3 halfBound = float3(.5f, .5f, .5f) * scale - particleRadius;
+
+    // Reduce volume (cause of curse of dimensionality)
+#ifdef ENABLE_3D
+    halfBound *= 0.25f;
+#endif
     
-    if (abs(pos.x) > halfBoundX)
+    float3 pos = to_float3(positions[i]);
+    float3 vel = to_float3(velocities[i]);
+
+    if (abs(pos.x) > halfBound.x)
     {
-        pos.x = halfBoundX * sign(pos.x);
+        pos.x = halfBound.x * sign(pos.x);
         vel.x *= -1 * restitutionCoeff;
     }
-    if (abs(pos.y) > halfBoundY)
+    if (abs(pos.y) > halfBound.y)
     {
-        pos.y = halfBoundY * sign(pos.y);
+        pos.y = halfBound.y * sign(pos.y);
         vel.y *= -1 * restitutionCoeff;
     }
- 
+    if (abs(pos.z) > halfBound.z)
+    {
+        pos.z = halfBound.z * sign(pos.z);
+        vel.z *= -1 * restitutionCoeff;
+    }
+    
     positions[i] = pos;
     velocities[i] = vel;
 }
 
-float sampleKernelAt(float2 pos)
+float sampleKernelAt(vec pos)
 {
     float sum = 0.0f;
     
@@ -201,7 +233,7 @@ float getPressureFromDensity(float density1, float density2)
 
 void computePressureForce(int i)
 {
-    float2 pressureForce = (float2) 0;
+    vec pressureForce = (vec) 0;
     
     for (int j = 0; j < numParticles; j++)
     {
@@ -210,14 +242,14 @@ void computePressureForce(int i)
         
         float len = distance(positions[j], positions[i]);
         
-        float2 ndir = (positions[j] - positions[i]);
+        vec ndir = (positions[j] - positions[i]);
         
         if (len > 0.0f)
             ndir /= len;
         else
-            ndir = normalize(rand(float2(i, j)));
+            ndir = normalize(rand(float3(i, j, 0)));
 
-        float2 grad = SpikyParticleKernel.grad(len, ndir);
+        vec grad = SpikyParticleKernel.grad(len, ndir);
         float pressure = -getPressureFromDensity(densities[i], densities[j]);
         
         pressureForce += pressure * grad / densities[j];
@@ -228,7 +260,7 @@ void computePressureForce(int i)
 
 void computeViscosityForce(int i)
 {
-    float2 viscosityForce = (float2) 0;
+    vec viscosityForce = (vec) 0;
     
     for (int j = 0; j < numParticles; j++)
     {
@@ -251,7 +283,7 @@ void interactionForce(int i)
     if (dist > pointerRadius)
         return;
     
-    float2 dir = (float2) 0;
+    vec dir = (vec) 0;
     if (dist > 0.0001f)
     {
         dir = (pointerPos - positions[i]) / dist;
@@ -263,7 +295,7 @@ void interactionForce(int i)
 
 void computeExternalForce(int i)
 {
-    forces[i] += float2(0.0f, gravityCoeff);
+    forces[i] += float3(0.0f, gravityCoeff, 0.0f);
 
     interactionForce(i);
 }
@@ -271,7 +303,7 @@ void computeExternalForce(int i)
 void preStep(uint i)
 {
     // Reset forces
-    forces[i] = 0.0f;
+    forces[i] = (vec) 0.0f;
     
     
     // Update index
@@ -288,54 +320,7 @@ void preStep(uint i)
     ################################
 */
 
-[numthreads(X, 1, 1)]
-void Draw(uint3 id : SV_DispatchThreadID)
-{
-    uint w, h;
-    result.GetDimensions(w, h);
-    uint total = w * h;
-    
-    if (id.x >= total)
-        return;
-    
-    uint2 coords = uint2(id.x / h, id.x % h);
-    float2 ncoords = float2((float) coords.x / w, (float) coords.y / h);
-    float2 tcoords = transform(ncoords);
-    
-    float density = particleMass * sampleKernelAt(tcoords);
-    float pressure = getPressureFromDensity(density);
-    
-    // Gather some stats
-    InterlockedMax(stats[0], (int) (density * 1000));
-    InterlockedMin(stats[1], (int) (pressure * 1000));
-    InterlockedMax(stats[2], (int) (pressure * 1000));
-    
-    // Draw interactable circle
-    if (distance(distance(pointerPos, tcoords), pointerRadius) < 0.001f)
-    {
-        result[coords.xy] = float4(0, 1, 0, 1);
-        return;
-    }
-    
-    // Draw Particles
-    for (int i = 0; i < numParticles; i++)
-    {
-        if (distance(tcoords, positions[i]) < particleRadius)
-        {
-            float v = length(velocities[i]) * 2.0f;
-            float3 color = lerp(float3(0.24, 0.35, 0.99), lerp(float3(0, 0.76, 1), lerp(float3(0, 0.9, 0.46), lerp(float3(0.96, 0.82, 0.25), float3(1, 0.34, 0.2), v), v), v), v);
-            result[coords.xy] = float4(color, 1.0f);
-            result[coords.xy] = float4(0,0,0, 1.0f);
-            return;
-        }
-    }
-    
-    // Draw Pressure
-    float4 neg = float4(1.0f, 0.0f, 0.0f, 1.0f);
-    float4 zero = float4(1.0f, 1.0f, 1.0f, 1.0f);
-    float4 pos = float4(0.0f, 0.0f, 1.0f, 1.0f);
-    result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 0.1f) : lerp(zero, pos, pressure * 0.1f);
-}
+
 
 [numthreads(X, 1, 1)]
 void PreStep(uint3 id : SV_DispatchThreadID)

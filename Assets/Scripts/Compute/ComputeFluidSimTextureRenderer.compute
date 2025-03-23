@@ -1,0 +1,255 @@
+#pragma kernel Draw
+#pragma kernel Test
+
+#define X 1024
+#define PI 3.14159265359f
+
+/*
+    ################################
+    ########### STRUCTS ############
+    ################################
+*/
+
+#define IndexRes 10
+#define BucketSize 100
+
+struct Block
+{
+    uint bucket[BucketSize + 1]; // Last is for count
+};
+
+struct BlockIndex
+{
+    Block blocks[IndexRes][IndexRes][IndexRes];
+};
+
+/*
+    ################################
+    ############ DATA ##############
+    ################################
+*/
+
+static float2 scale = float2(2.0f, 1.0f);
+static float2 offset = float2(-0.5, -0.5);
+
+bool pointerActive = 0;
+float pointerRadius = 0.3f;
+float pointerStrength = 1.0f;
+float2 pointerPos = float2(-10000, -10000);
+
+int numParticles;
+float particleRadius;
+float particleMass;
+float restitutionCoeff;
+float targetDensity;
+float pressureCoeff;
+float viscosityCoeff;
+float gravityCoeff;
+float kernelRadius;
+float kernelRadius2;
+float kernelRadius3;
+float kernelRadius4;
+float kernelRadius5;
+
+RWStructuredBuffer<float2> positions;
+RWStructuredBuffer<float2> velocities;
+RWStructuredBuffer<float2> forces;
+RWStructuredBuffer<float> densities;
+
+RWStructuredBuffer<BlockIndex> blockIndex;
+RWStructuredBuffer<uint> reverseIndex;
+
+RWTexture2D<float4> result;
+
+RWStructuredBuffer<int> stats;
+
+float deltaTime;
+static float fixedDeltaTime = 1 / 1000.0f;
+
+/*
+    ################################
+    ###### PARTICLE KERNELS ########
+    ################################
+*/
+
+struct Spiky
+{
+    float F(float dist)
+    {
+        if (dist >= kernelRadius)
+        {
+            return 0.0f;
+        }
+        
+        float x = 1.0f - dist / kernelRadius;
+        return 15.0f / (PI * kernelRadius3) * x * x * x;
+    }
+    
+    float dF(float dist)
+    {
+        if (dist >= kernelRadius)
+        {
+            return 0;
+        }
+
+        float x = 1.0f - dist / kernelRadius;
+        return -45.0f / (PI * kernelRadius4) * x * x;
+    }
+    
+    float ddF(float dist)
+    {
+        if (dist >= kernelRadius)
+        {
+            return 0;
+        }
+
+        float x = 1.0f - dist / kernelRadius;
+        return 90.0f / (PI * kernelRadius5) * x;
+    }
+    
+    float2 grad(float dist, float2 normalizedDirToCenter)
+    {
+        return -dF(dist) * normalizedDirToCenter;
+    }
+};
+
+Spiky SpikyParticleKernel;
+ 
+/*
+    ################################
+    ############ UTIL ##############
+    ################################
+*/
+
+float2 transform(float2 x)
+{
+    return (x + offset) * scale;
+}
+
+/*
+    ################################
+    ############# SIM ##############
+    ################################
+*/
+
+void resolveCollisions(uint i)
+{
+    float halfBoundX = 1.0f - particleRadius;
+    float halfBoundY = 0.5f - particleRadius;
+    float2 pos = positions[i];
+    float2 vel = velocities[i];
+    
+    if (abs(pos.x) > halfBoundX)
+    {
+        pos.x = halfBoundX * sign(pos.x);
+        vel.x *= -1 * restitutionCoeff;
+    }
+    if (abs(pos.y) > halfBoundY)
+    {
+        pos.y = halfBoundY * sign(pos.y);
+        vel.y *= -1 * restitutionCoeff;
+    }
+ 
+    positions[i] = pos;
+    velocities[i] = vel;
+}
+
+float sampleKernelAt(float2 pos)
+{
+    float sum = 0.0f;
+    
+    for (int i = 0; i < numParticles; i++)
+    {
+        sum += SpikyParticleKernel.F(distance(pos, positions[i]));
+    }
+    
+    return sum;
+}
+
+void computeDensities(uint i)
+{
+    densities[i] = particleMass * sampleKernelAt(positions[i]);
+    InterlockedMax(stats[0], (int) (densities[i] * 1000));
+}
+
+float getPressureFromDensity(float density)
+{
+    float diff = density - targetDensity;
+    return pressureCoeff * diff;
+}
+
+float getPressureFromDensity(float density1, float density2)
+{
+    float diff1 = density1 - targetDensity;
+    float diff2 = density2 - targetDensity;
+    return 0.5f * pressureCoeff * (diff1 + diff2);
+}
+
+/*
+    ################################
+    ############ KERN ##############
+    ################################
+*/
+
+[numthreads(X, 1, 1)]
+void Draw(uint3 id : SV_DispatchThreadID)
+{
+    uint w, h;
+    result.GetDimensions(w, h);
+    uint total = w * h;
+    
+    if (id.x >= total)
+        return;
+    
+    uint2 coords = uint2(id.x / h, id.x % h);
+    float2 ncoords = float2((float) coords.x / w, (float) coords.y / h);
+    float2 tcoords = transform(ncoords);
+    
+    float density = particleMass * sampleKernelAt(tcoords);
+    float pressure = getPressureFromDensity(density);
+    
+    // Gather some stats
+    InterlockedMax(stats[0], (int) (density * 1000));
+    InterlockedMin(stats[1], (int) (pressure * 1000));
+    InterlockedMax(stats[2], (int) (pressure * 1000));
+    
+    // Draw interactable circle
+    if (distance(distance(pointerPos, tcoords), pointerRadius) < 0.001f)
+    {
+        result[coords.xy] = float4(0, 1, 0, 1);
+        return;
+    }
+    
+    // Draw Particles
+    for (int i = 0; i < numParticles; i++)
+    {
+        if (distance(tcoords, positions[i]) < particleRadius)
+        {
+            float v = length(velocities[i]) * 2.0f;
+            float3 color = lerp(float3(0.24, 0.35, 0.99), lerp(float3(0, 0.76, 1), lerp(float3(0, 0.9, 0.46), lerp(float3(0.96, 0.82, 0.25), float3(1, 0.34, 0.2), v), v), v), v);
+            result[coords.xy] = float4(color, 1.0f);
+            result[coords.xy] = float4(0, 0, 0, 1.0f);
+            return;
+        }
+    }
+    
+    // Draw Pressure
+    float4 neg = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    float4 zero = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    float4 pos = float4(0.0f, 0.0f, 1.0f, 1.0f);
+    result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 0.1f) : lerp(zero, pos, pressure * 0.1f);
+}
+
+[numthreads(X, 1, 1)]
+void Test(uint3 id : SV_DispatchThreadID)
+{
+    uint w, h;
+    result.GetDimensions(w, h);
+    uint total = w * h;
+    
+    if (id.x >= total)
+        return;
+    
+    uint2 coords = uint2(id.x / h, id.x % h);
+    result[coords.xy] = float4(0, 1, 0, 1);
+}

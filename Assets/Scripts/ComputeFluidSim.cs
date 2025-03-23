@@ -1,12 +1,8 @@
 using System;
-using TMPro;
 using UnityEngine;
-using System.Linq;
-using System.Runtime.InteropServices;
-using UnityEngine.InputSystem;
-using UnityEditor;
+using UnityEngine.Rendering;
 
-public class ComputePreviewer : MonoBehaviour
+public class ComputeFluidSim : MonoBehaviour
 {
     public static readonly int X = 1024;
 
@@ -16,16 +12,21 @@ public class ComputePreviewer : MonoBehaviour
         Fixed
     };
 
+    public enum Dimension
+    {
+        Dimension2D = 2,
+        Dimension3D = 3
+    };
+
     [Header("Simulation settings")]
 
     public PlaybackMode playbackMode;
+    [EditorOnly] public Dimension dimension;
+    [EditorOnly] public ComputeShader computeShader;
 
-    public ComputeShader computeShader;
-    
     [Header("Properties")]
-     
-    public Vector2Int resolution;
-    public int numParticles = 100;
+
+    [EditorOnly] public int numParticles = 100;
     public float particleRadius = 0.01f;
     public float particleMass = 0.001f;
     public float targetDensity = 1000.0f;
@@ -38,12 +39,10 @@ public class ComputePreviewer : MonoBehaviour
     public float pointerRadius = 0.3f;
     public float pointerStrength = 1.0f;
 
-    private RenderTexture renderTexture;
-    private ComputeBuffer positionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
+    public ComputeBuffer positionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
     public enum ComputeKernel
     {
-        Draw = 0,
         Step,
         PreStep,
     }
@@ -52,93 +51,110 @@ public class ComputePreviewer : MonoBehaviour
 
     void Awake()
     {
-        InitializeRenderTexture();
         InitializeBuffers();
         InitializePositions();
-        SetUniformData();
-        //DispatchRandomInit();
-        DispatchDraw();
+        SetBufferData(computeShader, Enum.GetValues(typeof(ComputeKernel)).Length);
+
+        computeShader.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
+        computeShader.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
     }
 
     private void InitializePositions()
     {
-        Vector2[] initialPositions = new Vector2[numParticles];
-        int ceil = Mathf.CeilToInt(Mathf.Sqrt((float)numParticles));
-        float spacing = 0.5f / ceil;
-        for (int i = 0; i < numParticles; i++)
+        float width = 0.75f;
+        float halfWidth = width / 2;
+
+        // For 2D
+        if (dimension == Dimension.Dimension2D)
         {
-            int x = i / ceil;
-            int y = i % ceil;
-            initialPositions[i] = new Vector2(spacing * x - 0.25f, spacing * y - 0.25f);
+            Vector2[] initialPositions = new Vector2[numParticles];
+            int rowSize = Mathf.CeilToInt(Mathf.Sqrt((float)numParticles));
+            float spacing = width / rowSize;
+            for (int i = 0; i < numParticles; i++)
+            {
+                int x = i / rowSize;
+                int y = i % rowSize;
+                initialPositions[i] = new Vector2(spacing * x - halfWidth, spacing * y - halfWidth);
+            }
+            positionBuffer.SetData(initialPositions);
         }
-
-        positionBuffer.SetData(initialPositions);
-    }
-
-    void InitializeRenderTexture()
-    {
-        renderTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.ARGB32);
-        renderTexture.enableRandomWrite = true;
-        renderTexture.Create();
-        GetComponentInChildren<Renderer>().material.mainTexture = renderTexture;
+        // For 3D
+        else
+        {
+            Vector3[] initialPositions = new Vector3[numParticles];
+            int rowSize = Mathf.CeilToInt(Mathf.Pow((float)numParticles, 1.0f / 3.0f));
+            int sliceSize = rowSize * rowSize;
+            float spacing = 0.5f / rowSize;
+            for (int i = 0; i < numParticles; i++)
+            {
+                int x = i / sliceSize;
+                int y = (i % sliceSize) / rowSize;
+                int z = i % rowSize;
+                initialPositions[i] = new Vector3(spacing * x - halfWidth, spacing * y - halfWidth, spacing * z - halfWidth);
+            }
+            positionBuffer.SetData(initialPositions);
+        }
     }
 
     private void InitializeBuffers()
     {
-        positionBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
-        velocityBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
-        forceBuffer = new ComputeBuffer(numParticles, sizeof(float) * 2);
+        int stride = sizeof(float) * (int)dimension;
+
+        positionBuffer = new ComputeBuffer(numParticles, stride);
+        velocityBuffer = new ComputeBuffer(numParticles, stride);
+        forceBuffer = new ComputeBuffer(numParticles, stride);
         densityBuffer = new ComputeBuffer(numParticles, sizeof(float));
         statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint), ComputeBufferType.Raw);
         statsBuffer.SetData(stats);
+    }
 
-        for (int k = 0; k < Enum.GetValues(typeof(ComputeKernel)).Length; k++)
+    public void SetBufferData(ComputeShader cs, int numKernels)
+    {
+        for (int k = 0; k < numKernels; k++)
         {
-            computeShader.SetBuffer(k, "positions", positionBuffer);
-            computeShader.SetBuffer(k, "velocities", velocityBuffer);
-            computeShader.SetBuffer(k, "forces", forceBuffer);
-            computeShader.SetBuffer(k, "densities", densityBuffer);
-            computeShader.SetBuffer(k, "stats", statsBuffer);
-
-            computeShader.SetTexture(k, "result", renderTexture);
+            cs.SetBuffer(k, "positions", positionBuffer);
+            cs.SetBuffer(k, "velocities", velocityBuffer);
+            cs.SetBuffer(k, "forces", forceBuffer);
+            cs.SetBuffer(k, "densities", densityBuffer);
+            cs.SetBuffer(k, "stats", statsBuffer);
         }
     }
 
-    void SetUniformData()
+    public void SetUniformData(ComputeShader cs)
     {
-        computeShader.SetFloat("restitutionCoeff", restitutionCoeff);
-        computeShader.SetInt("numParticles", numParticles);
-        computeShader.SetFloat("particleRadius", particleRadius);
-        computeShader.SetFloat("particleMass", particleMass);
-        computeShader.SetFloat("targetDensity", targetDensity);
-        computeShader.SetFloat("pressureCoeff", pressureCoeff);
-        computeShader.SetFloat("viscosityCoeff", viscosityCoeff);
-        computeShader.SetFloat("gravityCoeff", gravityCoeff);
-        computeShader.SetFloat("deltaTime", Time.deltaTime);
+        cs.SetFloat("restitutionCoeff", restitutionCoeff);
+        cs.SetInt("numParticles", numParticles);
+        cs.SetFloat("particleRadius", particleRadius);
+        cs.SetFloat("particleMass", particleMass);
+        cs.SetFloat("targetDensity", targetDensity);
+        cs.SetFloat("pressureCoeff", pressureCoeff);
+        cs.SetFloat("viscosityCoeff", viscosityCoeff);
+        cs.SetFloat("gravityCoeff", gravityCoeff);
+        cs.SetFloat("deltaTime", Time.deltaTime);
 
         float kr2 = kernelRadius * kernelRadius;
         float kr3 = kr2 * kernelRadius;
         float kr4 = kr3 * kernelRadius;
         float kr5 = kr4 * kernelRadius;
-        computeShader.SetFloat("kernelRadius", kernelRadius);
-        computeShader.SetFloat("kernelRadius2", kr2);
-        computeShader.SetFloat("kernelRadius3", kr3);
-        computeShader.SetFloat("kernelRadius4", kr4);
-        computeShader.SetFloat("kernelRadius5", kr5);
+        cs.SetFloat("kernelRadius", kernelRadius);
+        cs.SetFloat("kernelRadius2", kr2);
+        cs.SetFloat("kernelRadius3", kr3);
+        cs.SetFloat("kernelRadius4", kr4);
+        cs.SetFloat("kernelRadius5", kr5);
 
         if (Input.GetMouseButton(0))
         {
-            computeShader.SetBool("pointerActive", true);
+            cs.SetBool("pointerActive", true);
             if (Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out RaycastHit hit, 3.0f))
             {
-                computeShader.SetVector("pointerPos", inverseTransform(hit.point));
+                cs.SetVector("pointerPos", inverseTransform(hit.textureCoord));
             }
-            computeShader.SetFloat("pointerRadius", pointerRadius);
-            computeShader.SetFloat("pointerStrength", pointerStrength);
+            cs.SetFloat("pointerRadius", pointerRadius);
+            cs.SetFloat("pointerStrength", pointerStrength);
         }
         else
         {
-            computeShader.SetBool("pointerActive", false);
+            cs.SetBool("pointerActive", false);
         }
     }
 
@@ -151,18 +167,9 @@ public class ComputePreviewer : MonoBehaviour
 
         if (playbackMode == PlaybackMode.Fixed || Input.GetKeyDown(KeyCode.RightArrow))
         {
-            SetUniformData();
+            SetUniformData(computeShader);
             DispatchStep();
-            DispatchDraw();
             DisplayStats();
-        }
-    }
-
-    private void OnDrawGizmos()
-    {
-        if (Application.isPlaying)
-        {
-            return;
         }
     }
 
@@ -194,17 +201,8 @@ public class ComputePreviewer : MonoBehaviour
         statsBuffer.Release();
     }
 
-    void DispatchDraw()
-    {
-        if (computeShader == null || renderTexture == null) return;
-
-        computeShader.Dispatch((int)ComputeKernel.Draw, Mathf.CeilToInt((float)(resolution.x * resolution.y) / X), 1, 1);
-    }
-
     void DispatchStep()
     {
-        if (computeShader == null || renderTexture == null) return;
-
         computeShader.Dispatch((int)ComputeKernel.PreStep, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
         computeShader.Dispatch((int)ComputeKernel.Step, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
     }
