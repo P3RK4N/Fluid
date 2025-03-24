@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -12,45 +13,64 @@ public class ComputeFluidSim : MonoBehaviour
         Fixed
     };
 
+    public enum Method
+    {
+        Default,
+        Sebastian,
+    };
+
     public enum Dimension
     {
         Dimension2D = 2,
         Dimension3D = 3
     };
 
+    public enum ComputeKernel
+    {
+        Predict,
+        Density,
+        Pressure,
+        Viscosity,
+        Step,
+    }
+
     [Header("Simulation settings")]
 
     public PlaybackMode playbackMode;
+    [EditorOnly] public Method method;
     [EditorOnly] public Dimension dimension;
-    [EditorOnly] public ComputeShader computeShader;
-
-    [Header("Properties")]
-
+    [EditorOnly] public ComputeShader defaultFluidCompute;
+    [EditorOnly] public ComputeShader sebFluidCompute;
     [EditorOnly] public int numParticles = 100;
+    public float timeStep = 1 / 120.0f;
+    public float gravityCoeff = -9.81f;
+
+    [Header("Particle Properties")]
+
     public float particleRadius = 0.01f;
     public float particleMass = 0.001f;
     public float targetDensity = 1000.0f;
     public float pressureCoeff = 1.0f;
+    public float nearPressureCoeff = 1.0f;
     public float viscosityCoeff = 1.0f;
-    public float gravityCoeff = -9.81f;
     public float kernelRadius = 0.1f;
     public float restitutionCoeff = 0.99f;
+
+    [Header("Interaction properties")]
 
     public float pointerRadius = 0.3f;
     public float pointerStrength = 1.0f;
 
-    public ComputeBuffer positionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
-    public enum ComputeKernel
-    {
-        Step,
-        PreStep,
-    }
+    public ComputeShader computeShader;
+    public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
     int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    float simulatedTime = 0.0f;
 
     void Awake()
     {
+        InitializeComputeShader();
         InitializeBuffers();
         InitializePositions();
         SetBufferData(computeShader, Enum.GetValues(typeof(ComputeKernel)).Length);
@@ -59,9 +79,18 @@ public class ComputeFluidSim : MonoBehaviour
         computeShader.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
     }
 
+    private void InitializeComputeShader()
+    {
+        switch (method)
+        {
+            case Method.Default: computeShader = defaultFluidCompute; break;
+            case Method.Sebastian: computeShader = sebFluidCompute; break;
+        }
+    }
+
     private void InitializePositions()
     {
-        float preferred_width = 1.0f;
+        float preferred_width = 10.0f;
         Vector3 width = new Vector3(Mathf.Min(preferred_width, transform.localScale.x), Mathf.Min(preferred_width, transform.localScale.y), Mathf.Min(preferred_width, transform.localScale.z));
         Vector3 halfWidth = width / 2.0f;
         var mat = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
@@ -76,7 +105,7 @@ public class ComputeFluidSim : MonoBehaviour
             {
                 int x = i / rowSize;
                 int y = i % rowSize;
-                initialPositions[i] = new Vector2(spacing.x * x - halfWidth.x, spacing.x * y - halfWidth.x);
+                initialPositions[i] = mat * new Vector4(spacing.x * x - halfWidth.x, spacing.x * y - halfWidth.x, 0, 1);
             }
             positionBuffer.SetData(initialPositions);
         }
@@ -92,7 +121,7 @@ public class ComputeFluidSim : MonoBehaviour
                 int x = i / sliceSize;
                 int y = (i % sliceSize) / rowSize;
                 int z = i % rowSize;
-                initialPositions[i] = mat * new Vector3(spacing.x * x - halfWidth.x, spacing.y * y - halfWidth.y, spacing.z * z - halfWidth.z);
+                initialPositions[i] = mat * new Vector4(spacing.x * x - halfWidth.x, spacing.y * y - halfWidth.y, spacing.z * z - halfWidth.z, 1.0f);
             }
             positionBuffer.SetData(initialPositions);
         }
@@ -101,13 +130,19 @@ public class ComputeFluidSim : MonoBehaviour
     private void InitializeBuffers()
     {
         int stride = sizeof(float) * (int)dimension;
+        int densityCount = method == Method.Sebastian ? 2 : 1;
 
         positionBuffer = new ComputeBuffer(numParticles, stride);
         velocityBuffer = new ComputeBuffer(numParticles, stride);
         forceBuffer = new ComputeBuffer(numParticles, stride);
-        densityBuffer = new ComputeBuffer(numParticles, sizeof(float));
+        densityBuffer = new ComputeBuffer(numParticles, sizeof(float) * densityCount);
         statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint), ComputeBufferType.Raw);
         statsBuffer.SetData(stats);
+
+        if (method == Method.Sebastian)
+        {
+            predictedPositionBuffer = new ComputeBuffer(numParticles, stride);
+        }
     }
 
     public void SetBufferData(ComputeShader cs, int numKernels)
@@ -119,6 +154,11 @@ public class ComputeFluidSim : MonoBehaviour
             cs.SetBuffer(k, "forces", forceBuffer);
             cs.SetBuffer(k, "densities", densityBuffer);
             cs.SetBuffer(k, "stats", statsBuffer);
+
+            if (predictedPositionBuffer != null)
+            {
+                cs.SetBuffer(k, "predictedPositions", predictedPositionBuffer);
+            }
         }
     }
 
@@ -130,9 +170,10 @@ public class ComputeFluidSim : MonoBehaviour
         cs.SetFloat("particleMass", particleMass);
         cs.SetFloat("targetDensity", targetDensity);
         cs.SetFloat("pressureCoeff", pressureCoeff);
+        cs.SetFloat("nearPressureCoeff", nearPressureCoeff);
         cs.SetFloat("viscosityCoeff", viscosityCoeff);
         cs.SetFloat("gravityCoeff", gravityCoeff);
-        cs.SetFloat("deltaTime", Time.deltaTime);
+        cs.SetFloat("timeStep", timeStep);
         cs.SetMatrix("trMat", Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one));
         cs.SetMatrix("trMatInv", Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one).inverse);
         cs.SetVector("scale", transform.localScale);
@@ -146,6 +187,15 @@ public class ComputeFluidSim : MonoBehaviour
         cs.SetFloat("kernelRadius3", kr3);
         cs.SetFloat("kernelRadius4", kr4);
         cs.SetFloat("kernelRadius5", kr5);
+
+        if (method == Method.Sebastian)
+        {
+            cs.SetFloat("Poly6ScalingFactor", 4 / (Mathf.PI * Mathf.Pow(kernelRadius, 8)));
+            cs.SetFloat("SpikyPow3ScalingFactor", 10 / (Mathf.PI * Mathf.Pow(kernelRadius, 5)));
+            cs.SetFloat("SpikyPow2ScalingFactor", 6 / (Mathf.PI * Mathf.Pow(kernelRadius, 4)));
+            cs.SetFloat("SpikyPow3DerivativeScalingFactor", 30 / (Mathf.Pow(kernelRadius, 5) * Mathf.PI));
+            cs.SetFloat("SpikyPow2DerivativeScalingFactor", 12 / (Mathf.Pow(kernelRadius, 4) * Mathf.PI));
+        }
 
         if (Input.GetMouseButton(0))
         {
@@ -170,12 +220,34 @@ public class ComputeFluidSim : MonoBehaviour
             return;
         }
 
-        if (playbackMode == PlaybackMode.Fixed || Input.GetKeyDown(KeyCode.RightArrow))
+        Simulate();
+    }
+
+    private void Simulate()
+    {
+        // Set cbuffer data
+        SetUniformData(computeShader);
+        
+        // Fixed timestep simulation
+        if (playbackMode == PlaybackMode.Fixed)
         {
-            SetUniformData(computeShader);
-            DispatchStep();
-            DisplayStats();
+            while (simulatedTime >= 0.0f)
+            {
+                simulatedTime -= timeStep;
+                DispatchStep();
+            }
+
+            simulatedTime += Time.deltaTime;
         }
+
+        // Manual step simulation
+        else if (playbackMode == PlaybackMode.Step || Input.GetKeyDown(KeyCode.RightArrow))
+        {
+            DispatchStep();
+        }
+
+        // Some debug stuff
+        DisplayStats();
     }
 
     private void DisplayStats()
@@ -208,7 +280,12 @@ public class ComputeFluidSim : MonoBehaviour
 
     void DispatchStep()
     {
-        computeShader.Dispatch((int)ComputeKernel.PreStep, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
-        computeShader.Dispatch((int)ComputeKernel.Step, Mathf.CeilToInt((float)(numParticles) / X), 1, 1);
+        int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
+
+        computeShader.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
+        computeShader.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
+        computeShader.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
+        computeShader.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);
+        computeShader.Dispatch((int)ComputeKernel.Step, numThreadGroups, 1, 1);
     }
 }

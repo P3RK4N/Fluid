@@ -29,8 +29,7 @@ struct BlockIndex
     ################################
 */
 
-static float2 scale = float2(2.0f, 1.0f);
-static float2 offset = float2(-0.5, -0.5);
+float4x4 trsMat;
 
 bool pointerActive = 0;
 float pointerRadius = 0.3f;
@@ -117,42 +116,9 @@ Spiky SpikyParticleKernel;
  
 /*
     ################################
-    ############ UTIL ##############
-    ################################
-*/
-
-float2 transform(float2 x)
-{
-    return (x + offset) * scale;
-}
-
-/*
-    ################################
     ############# SIM ##############
     ################################
 */
-
-void resolveCollisions(uint i)
-{
-    float halfBoundX = 1.0f - particleRadius;
-    float halfBoundY = 0.5f - particleRadius;
-    float2 pos = positions[i];
-    float2 vel = velocities[i];
-    
-    if (abs(pos.x) > halfBoundX)
-    {
-        pos.x = halfBoundX * sign(pos.x);
-        vel.x *= -1 * restitutionCoeff;
-    }
-    if (abs(pos.y) > halfBoundY)
-    {
-        pos.y = halfBoundY * sign(pos.y);
-        vel.y *= -1 * restitutionCoeff;
-    }
- 
-    positions[i] = pos;
-    velocities[i] = vel;
-}
 
 float sampleKernelAt(float2 pos)
 {
@@ -178,13 +144,6 @@ float getPressureFromDensity(float density)
     return pressureCoeff * diff;
 }
 
-float getPressureFromDensity(float density1, float density2)
-{
-    float diff1 = density1 - targetDensity;
-    float diff2 = density2 - targetDensity;
-    return 0.5f * pressureCoeff * (diff1 + diff2);
-}
-
 /*
     ################################
     ############ KERN ##############
@@ -202,8 +161,8 @@ void Draw(uint3 id : SV_DispatchThreadID)
         return;
     
     uint2 coords = uint2(id.x / h, id.x % h);
-    float2 ncoords = float2((float) coords.x / w, (float) coords.y / h);
-    float2 tcoords = transform(ncoords);
+    float2 ncoords = float2((float) coords.x / w - 0.5f, (float) coords.y / h - 0.5f);
+    float2 tcoords = mul(trsMat, float4(ncoords, 0.0f, 1.0f)).xy;
     
     float density = particleMass * sampleKernelAt(tcoords);
     float pressure = getPressureFromDensity(density);

@@ -1,5 +1,8 @@
+#pragma kernel Predict
+#pragma kernel Density
+#pragma kernel Pressure
+#pragma kernel Viscosity
 #pragma kernel Step
-#pragma kernel PreStep
 
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
@@ -59,6 +62,7 @@ float particleMass;
 float restitutionCoeff;
 float targetDensity; 
 float pressureCoeff;
+float nearPressureCoeff;
 float viscosityCoeff;
 float gravityCoeff;
 float kernelRadius;
@@ -83,8 +87,7 @@ RWTexture2D<float4> result;
 
 RWStructuredBuffer<int> stats; 
 
-float deltaTime;
-static float fixedDeltaTime = 1 / 1000.0f;
+float timeStep;
 
 /*
     ################################
@@ -322,7 +325,7 @@ void preStep(uint i)
 
 
 [numthreads(X, 1, 1)]
-void PreStep(uint3 id : SV_DispatchThreadID)
+void Predict(uint3 id : SV_DispatchThreadID)
 {
     uint x, _;
     positions.GetDimensions(x, _);
@@ -342,6 +345,24 @@ void PreStep(uint3 id : SV_DispatchThreadID)
 }
 
 [numthreads(X, 1, 1)]
+void Density(uint3 id : SV_DispatchThreadID)
+{
+    return;
+}
+
+[numthreads(X, 1, 1)]
+void Pressure(uint3 id : SV_DispatchThreadID)
+{
+    return;
+}
+
+[numthreads(X, 1, 1)]
+void Viscosity(uint3 id : SV_DispatchThreadID)
+{
+    return;
+}
+
+[numthreads(X, 1, 1)]
 void Step(uint3 id : SV_DispatchThreadID)
 {
     uint x, _;
@@ -354,8 +375,8 @@ void Step(uint3 id : SV_DispatchThreadID)
     computeViscosityForce(id.x);
     computeExternalForce(id.x);
     
-    velocities[id.x] += forces[id.x] * fixedDeltaTime;
-    positions[id.x] += velocities[id.x] * fixedDeltaTime;
+    velocities[id.x] += forces[id.x] * timeStep;
+    positions[id.x] += velocities[id.x] * timeStep;
     
     resolveCollisions(id.x);
 }

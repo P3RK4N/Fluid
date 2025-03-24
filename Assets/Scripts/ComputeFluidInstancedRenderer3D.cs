@@ -10,7 +10,7 @@ public class ComputeFluidInstancedRenderer3D : MonoBehaviour
     ComputeFluidSim sim;
 
     RenderParams rp;
-    BoxCollider collider;
+    new BoxCollider collider;
 
     void Awake()
     {

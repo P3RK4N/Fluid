@@ -48,7 +48,8 @@ public class ComputeFluidTextureRenderer2D : MonoBehaviour
     {
         if (computeShader == null || renderTexture == null) return;
         Debug.Assert(sim.dimension == Dimension.Dimension2D, "Invalid dimension for texture renderer!");
-        
+
+        computeShader.SetMatrix("trsMat", transform.localToWorldMatrix);
         computeShader.Dispatch(0, Mathf.CeilToInt((float)(resolution.x * resolution.y) / X), 1, 1);
     }
 }
