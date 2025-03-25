@@ -302,20 +302,6 @@ void computeExternalForce(int i)
     interactionForce(i);
 }
 
-void preStep(uint i)
-{
-    // Reset forces
-    forces[i] = (vec) 0.0f;
-    
-    
-    // Update index
-    
-    // Recalculate neighbors
-    
-    // Compute densities
-    computeDensities(i);
-}
-
 /*
     ################################
     ############ KERN ##############
@@ -333,37 +319,32 @@ void Predict(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
     
-    // Reset forces
-    forces[id.x] = 0.0f;
-    
     // Update index
     
     // Recalculate neighbors
+    
+    // Reset forces
+    forces[id.x] = (vec) 0.0f;
+    
+    // External forces
+    computeExternalForce(id.x);
+}
+
+[numthreads(X, 1, 1)]
+void Density(uint3 id : SV_DispatchThreadID)
+{
+    uint x, _;
+    positions.GetDimensions(x, _);
+
+    if (id.x >= x)
+        return;
     
     // Compute densities
     computeDensities(id.x);
 }
 
 [numthreads(X, 1, 1)]
-void Density(uint3 id : SV_DispatchThreadID)
-{
-    return;
-}
-
-[numthreads(X, 1, 1)]
 void Pressure(uint3 id : SV_DispatchThreadID)
-{
-    return;
-}
-
-[numthreads(X, 1, 1)]
-void Viscosity(uint3 id : SV_DispatchThreadID)
-{
-    return;
-}
-
-[numthreads(X, 1, 1)]
-void Step(uint3 id : SV_DispatchThreadID)
 {
     uint x, _;
     positions.GetDimensions(x, _);
@@ -372,9 +353,23 @@ void Step(uint3 id : SV_DispatchThreadID)
         return;
     
     computePressureForce(id.x);
-    computeViscosityForce(id.x);
-    computeExternalForce(id.x);
+}
+
+[numthreads(X, 1, 1)]
+void Viscosity(uint3 id : SV_DispatchThreadID)
+{
+    uint x, _;
+    positions.GetDimensions(x, _);
+
+    if (id.x >= x)
+        return;
     
+    computeViscosityForce(id.x);
+}
+
+[numthreads(X, 1, 1)]
+void Step(uint3 id : SV_DispatchThreadID)
+{
     velocities[id.x] += forces[id.x] * timeStep;
     positions[id.x] += velocities[id.x] * timeStep;
     

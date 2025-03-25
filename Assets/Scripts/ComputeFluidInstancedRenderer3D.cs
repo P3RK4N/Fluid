@@ -24,6 +24,7 @@ public class ComputeFluidInstancedRenderer3D : MonoBehaviour
     void Start()
     {
         rp.matProps.SetBuffer("positions", sim.positionBuffer);
+        rp.matProps.SetBuffer("velocities", sim.velocityBuffer);
     }
 
     void Update()
