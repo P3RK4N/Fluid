@@ -32,18 +32,7 @@
     ################################
 */
 
-#define IndexRes 10
-#define BucketSize 100
 
-struct Block
-{
-    uint bucket[BucketSize + 1]; // Last is for count
-};
-
-struct BlockIndex
-{
-    Block blocks[IndexRes][IndexRes][IndexRes];
-};
 
 /*
     ################################

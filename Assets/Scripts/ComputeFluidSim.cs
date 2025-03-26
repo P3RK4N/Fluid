@@ -62,14 +62,17 @@ public class ComputeFluidSim : MonoBehaviour
     public float pointerStrength = 1.0f;
 
 
-    public ComputeShader computeShader;
+    ComputeShader computeShader;
     public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
+
+    ComputeGrid computeGrid;
 
     int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
 
     void Awake()
     {
+        computeGrid = GetComponent<ComputeGrid>();
         InitializeComputeShader();
         InitializeBuffers();
         InitializePositions();
@@ -77,6 +80,11 @@ public class ComputeFluidSim : MonoBehaviour
 
         computeShader.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
         computeShader.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
+    }
+
+    void Start()
+    {
+        computeGrid.InitializeGrid(predictedPositionBuffer, computeShader, 0, 1, 2, 3, 4);
     }
 
     private void InitializeComputeShader()
@@ -136,7 +144,7 @@ public class ComputeFluidSim : MonoBehaviour
         velocityBuffer = new ComputeBuffer(numParticles, stride);
         forceBuffer = new ComputeBuffer(numParticles, stride);
         densityBuffer = new ComputeBuffer(numParticles, sizeof(float) * densityCount);
-        statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint), ComputeBufferType.Raw);
+        statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint));
         statsBuffer.SetData(stats);
 
         if (method == Method.Sebastian)
@@ -241,7 +249,7 @@ public class ComputeFluidSim : MonoBehaviour
         }
 
         // Manual step simulation
-        else if (playbackMode == PlaybackMode.Step || Input.GetKeyDown(KeyCode.RightArrow))
+        else if (playbackMode == PlaybackMode.Step && Input.GetKeyDown(KeyCode.RightArrow))
         {
             DispatchStep();
         }
@@ -253,12 +261,14 @@ public class ComputeFluidSim : MonoBehaviour
     private void DisplayStats()
     {
         statsBuffer.GetData(stats);
-        //Debug.Log
-        //(
-        //    $"Max density: {stats[0] / 1000.0f}\n" +
-        //    $"Min Pressure: {stats[1] / 1000.0f}\n" +
-        //    $"Max pressure: {stats[2] / 1000.0f}\n"
-        //);
+        Debug.Log
+        (
+            $"Max density: {stats[0] / 1000.0f}\n" +
+            $"Min Pressure: {stats[1] / 1000.0f}\n" +
+            $"Max pressure: {stats[2] / 1000.0f}\n" +
+            $"Comparisons: {stats[3]}\n" +
+            $"Neighbor passes: {stats[4]}\n"
+        );
 
         for (int i = 0; i < stats.Length; i++) stats[i] = 0;
         statsBuffer.SetData(stats);
@@ -283,6 +293,7 @@ public class ComputeFluidSim : MonoBehaviour
         int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
 
         computeShader.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
+        computeGrid.RecalculateGrid(kernelRadius, computeShader);
         computeShader.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
         computeShader.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
         computeShader.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);

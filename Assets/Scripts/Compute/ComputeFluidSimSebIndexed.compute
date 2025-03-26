@@ -24,10 +24,11 @@
 
 // Remove intellisense errors
 #ifndef vec
-#   define vec float2
-#   include "FluidMaths2D.hlsl"
+#   define vec float3
+#   include "FluidMaths3D.hlsl"
 #endif
 
+#include "../Grid/ComputeGrid.hlsl"
 
 /*
     ################################
@@ -139,18 +140,22 @@ float2 CalculateDensity(vec pos)
     float density = 0;
     float nearDensity = 0;
 
-    for (int i = 0; i < numParticles; i++)
-    {
+    // FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
+    for (int i = 0; i < numParticles; i++) {
         float sqrDist = magnitude2(predictedPositions[i] - pos);
+        
+        InterlockedAdd(stats[3], 1); // Comparisons
         
         if (sqrDist > sqrRadius)
             continue;
         
+        InterlockedAdd(stats[4], 1); // Neighbor passes
 
         float dst = sqrt(sqrDist);
         density += FluidMaths.DensityKernel(dst, kernelRadius);
         nearDensity += FluidMaths.NearDensityKernel(dst, kernelRadius);
     }
+    // FOREACH_ADJACENT_VALUE_END()
 
     return float2(density, nearDensity);
 }

@@ -1,0 +1,51 @@
+#pragma kernel Clear
+#pragma kernel Initialize
+
+#include "ComputeGrid.hlsl"
+
+// Input data (private)
+uint numPoints;
+RWStructuredBuffer<float3> points;
+
+void insert(float3 pos, uint value)
+{
+    uint bucketSeed = _getBucketSeed(pos);
+    
+    uint startIndex, endIndex;
+    uint step = 0;
+    uint insertIndex;
+    
+    while (true)
+    {
+        _getBucketRange(bucketSeed, step++, startIndex, endIndex);
+        InterlockedAdd(IndexGrid[startIndex + _bucketCapacity - 1], 1, insertIndex);
+        
+        if (insertIndex < _bucketCapacity - 1)
+        {
+            IndexGrid[startIndex + insertIndex] = value;
+            break;
+        }
+    }
+}
+
+[numthreads(1024,1,1)]
+void Clear (uint3 id : SV_DispatchThreadID)
+{
+    uint numBuckets = _gridSize3;
+    
+    if (id.x >= numBuckets)
+        return;
+    
+    uint bucketStart = id.x * _bucketCapacity;
+    uint bucketCountIndex = bucketStart + _bucketCapacity - 1;
+    IndexGrid[bucketCountIndex] = 0;
+}
+
+[numthreads(1024,1,1)]
+void Initialize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= numPoints)
+        return;
+    
+    insert(points[id.x], id.x);
+}
