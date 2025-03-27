@@ -7,6 +7,8 @@
 uint numPoints;
 RWStructuredBuffer<float3> points;
 
+RWStructuredBuffer<uint> debug;
+
 void insert(float3 pos, uint value)
 {
     uint bucketSeed = _getBucketSeed(pos);
@@ -28,6 +30,7 @@ void insert(float3 pos, uint value)
     }
 }
 
+// TODO: Clear only on positions (before predict step aka before positions change)
 [numthreads(1024,1,1)]
 void Clear (uint3 id : SV_DispatchThreadID)
 {
@@ -38,6 +41,10 @@ void Clear (uint3 id : SV_DispatchThreadID)
     
     uint bucketStart = id.x * _bucketCapacity;
     uint bucketCountIndex = bucketStart + _bucketCapacity - 1;
+    
+    InterlockedAdd(debug[0], IndexGrid[bucketCountIndex]);
+    InterlockedMax(debug[1], IndexGrid[bucketCountIndex]);
+    
     IndexGrid[bucketCountIndex] = 0;
 }
 

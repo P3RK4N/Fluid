@@ -136,28 +136,24 @@ void resolveCollisions(uint i)
 
 float2 CalculateDensity(vec pos)
 {
-    float sqrRadius = kernelRadius2;
-    float density = 0;
-    float nearDensity = 0;
+    float2 density = (float2) 0;
 
-    // FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
-    for (int i = 0; i < numParticles; i++) {
+     FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
         float sqrDist = magnitude2(predictedPositions[i] - pos);
         
         InterlockedAdd(stats[3], 1); // Comparisons
         
-        if (sqrDist > sqrRadius)
+        if (sqrDist > kernelRadius2)
             continue;
         
         InterlockedAdd(stats[4], 1); // Neighbor passes
 
         float dst = sqrt(sqrDist);
-        density += FluidMaths.DensityKernel(dst, kernelRadius);
-        nearDensity += FluidMaths.NearDensityKernel(dst, kernelRadius);
-    }
-    // FOREACH_ADJACENT_VALUE_END()
+        density.x += FluidMaths.DensityKernel(dst, kernelRadius);
+        density.y += FluidMaths.NearDensityKernel(dst, kernelRadius);
+     FOREACH_ADJACENT_VALUE_END()
 
-    return float2(density, nearDensity);
+    return density;
 }
 
 float PressureFromDensity(float density)
@@ -244,8 +240,7 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     vec pos = predictedPositions[id.x];
     float sqrRadius = kernelRadius2;
     
-    for (int i = 0; i < numParticles; i++)
-    {
+    FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
@@ -265,7 +260,7 @@ void Pressure(uint3 id : SV_DispatchThreadID)
 
         pressureForce += dirToNeighbour * FluidMaths.DensityDerivative(dst, kernelRadius) * sharedPressure / neighbourDensity;
         pressureForce += dirToNeighbour * FluidMaths.NearDensityDerivative(dst, kernelRadius) * sharedNearPressure / neighbourNearDensity;
-    }
+    FOREACH_ADJACENT_VALUE_END()
     
     vec acceleration = pressureForce / density;
     velocities[id.x] += acceleration * timeStep;
@@ -285,8 +280,7 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
     vec viscosityForce = 0;
     vec velocity = velocities[id.x];
 
-    for (int i = 0; i < numParticles; i++)
-    {
+    FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
@@ -296,7 +290,7 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
 		float dst = sqrt(sqrDist);
         vec neighbourVelocity = velocities[i];
         viscosityForce += (neighbourVelocity - velocity) * FluidMaths.ViscosityKernel(dst, kernelRadius);
-    }
+    FOREACH_ADJACENT_VALUE_END()
     
 	velocities[id.x] += viscosityForce * viscosityCoeff * timeStep;
 }

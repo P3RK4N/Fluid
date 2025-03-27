@@ -10,25 +10,29 @@ float _inverseBucketRadius;
 RWStructuredBuffer<uint> IndexGrid;             // id -> xyz
 RWStructuredBuffer<uint> _offsets;
 
+
 // Returns valid bucketIndex for current step (step 0 is identity)
 uint _GridHash(uint x, uint step)
 {
-    if (step == 0)
-        return x % _gridSize3;
+    return (x + step * 2) % _gridSize3;
 
-    x += 1;
-    x ^= x * 1664525u;
-    x ^= x * 1013904223u;
-    x *= step * 1664525u;
-    x ^= x >> 16;
+    //if (step == 0)
+    //    return x % _gridSize3;
+    //x += 1;
+    //x ^= x * 1664525u;
+    //x ^= x * 1013904223u;
+    //x *= step * 1664525u;
+    //x ^= x >> 16;
 
-    return x % _gridSize3;
+    //return x % _gridSize3;
 }
 
-// TODO: Optimize? (MIGHT: Add very bigg number to remove negatives)
-uint3 _umod(int3 val, uint n)
+// TODO: Optimize? 
+// DONE: Add very bigg number to remove negatives (Works only on small coordinates, which are almost all in practice)
+uint3 _umod(int3 val, int n)
 {
-    return uint3((val % n + n) % n);
+    return uint3(val + n * 1000000) % n;
+    //return uint3((val % n + n) % n);
 };
 
 // Normalize point coords (Where buckets are spaced by unit of 1)
@@ -42,7 +46,7 @@ uint3 _getBucketCoords(float3 pointCoords)
     return wrappedBucketCoords;
 }
 
-static uint3 _gridOffsets[27] =
+static groupshared const uint3 _gridOffsets[27] =
 {
     uint3(-1, -1, -1),  // Back-Left-Bottom
     uint3(-1, -1,  0),  // Back-Left
@@ -127,15 +131,16 @@ bool _getBucketRange(uint bucketSeed, uint step, out uint bucketStartIndex, out 
 }
 
 #define FOREACH_ADJACENT_VALUE_BEGIN(p, val)                                                                \
+    [unroll]                                                                                                \
     do                                                                                                      \
     {                                                                                                       \
         uint __adjacentSeeds[27];                                                                           \
         _getAdjacentBucketSeeds(p, __adjacentSeeds);                                                        \
-        uint __bucketStart, __bucketEnd;                                                                    \
         for (uint __i = 0; __i < 27; __i++)                                                                 \
         {                                                                                                   \
             uint __step = 0;                                                                                \
             bool __continue = true;                                                                         \
+            uint __bucketStart, __bucketEnd;                                                                \
             while (__continue)                                                                              \
             {                                                                                               \
                 __continue = _getBucketRange(__adjacentSeeds[__i], __step++, __bucketStart, __bucketEnd);   \

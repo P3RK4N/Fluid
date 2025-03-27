@@ -7,15 +7,22 @@ public class ComputeGrid : MonoBehaviour
     [EditorOnly] public int bucketCapacity = 10;
     [EditorOnly] public int gridSize = 10;
 
-    ComputeBuffer gridBuffer;
+    public ComputeBuffer gridBuffer;
 
-    int numPoints;
+    ComputeBuffer points;
+
+    ComputeBuffer debugBuffer;
+    uint[] debug = new uint[] { 0, 0, 0, 0, 0, 0, 0 };
 
     void Awake()
     {
         gridBuffer = new ComputeBuffer(gridSize * gridSize * gridSize * bucketCapacity, sizeof(uint));
         computeGrid.SetBuffer(0, "IndexGrid", gridBuffer);
         computeGrid.SetBuffer(1, "IndexGrid", gridBuffer);
+
+        debugBuffer = new ComputeBuffer(debug.Length, sizeof(uint));
+        computeGrid.SetBuffer(0, "debug", debugBuffer);
+        computeGrid.SetBuffer(1, "debug", debugBuffer);
     }
 
     public void InitializeGrid(ComputeBuffer points, ComputeShader clientShader, params int[] kernels)
@@ -29,7 +36,7 @@ public class ComputeGrid : MonoBehaviour
         computeGrid.SetInt("numPoints", points.count);
         computeGrid.SetBuffer(0, "points", points);
         computeGrid.SetBuffer(1, "points", points);
-        numPoints = points.count;
+        this.points = points;
 
         clientShader.SetInt("_gridSize", gridSize);
         clientShader.SetInt("_gridSize2", gridSize * gridSize);
@@ -49,19 +56,33 @@ public class ComputeGrid : MonoBehaviour
         computeGrid.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
 
         computeGrid.Dispatch(0 /* Clear */, Mathf.CeilToInt((float)(gridSize * gridSize * gridSize * bucketCapacity) / 1024), 1, 1);
-        //printBuckets(0);
-        computeGrid.Dispatch(1 /* Init  */, Mathf.CeilToInt((float)(numPoints) / 1024), 1, 1);
-        printBuckets(1);
+        computeGrid.Dispatch(1 /* Init  */, Mathf.CeilToInt((float)(points.count) / 1024), 1, 1);
+        //printBuckets();
+        debugPrint();
     }
 
     private void OnDestroy()
     {
         gridBuffer.Release();
+        debugBuffer.Release();
     }
 
 #region Debug
 
-    void printBuckets(int id)
+    void debugPrint()
+    {
+        debugBuffer.GetData(debug);
+
+        Debug.Log($"Average bucket count {debug[0] / 1.0f / gridSize / gridSize / gridSize}\nMax bucket count {debug[1]}");
+
+        for (int i = 0; i < debug.Length; i++)
+        {
+            debug[i] = 0;
+        }
+        debugBuffer.SetData(debug);
+    }
+
+    void printBuckets()
     {
         uint[] data = new uint[gridSize * gridSize * gridSize * bucketCapacity];
         gridBuffer.GetData(data);
@@ -71,6 +92,7 @@ public class ComputeGrid : MonoBehaviour
 
         // Iterate through the data array
         int totalBuckets = gridSize * gridSize * gridSize; // Total number of buckets in the grid
+        int numInserted = 0;
 
         for (int i = 0; i < totalBuckets; i++)
         {
@@ -81,7 +103,7 @@ public class ComputeGrid : MonoBehaviour
             // Get the count from the last element of the bucket
             uint count = data[lastElementIndex];
             int real_count = Mathf.Min((int)count, bucketSize);
-
+            numInserted += real_count;
             // If the bucket is non-empty, print the count and its corresponding bucket index
             if (count > 0)
             {
@@ -98,9 +120,11 @@ public class ComputeGrid : MonoBehaviour
 
                 // Print the bucket index and its count
                 // Print bucket contents
-                Debug.Log($"{id}> Bucket [{x}, {y}, {z}] has count: {count}\n{sb.ToString()}");
+                Debug.Log($"Bucket [{x}, {y}, {z}] has count: {count}\n{sb.ToString()}");
             }
         }
+
+        Debug.Log("Inserted " + numInserted);
     }
 
 #endregion Debug
