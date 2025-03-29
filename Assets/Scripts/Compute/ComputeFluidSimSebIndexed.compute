@@ -6,6 +6,14 @@
 
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
+#include "../Grid/ComputeGrid.hlsl"
+
+/*
+    ########################################
+    ############ PREPROCESSOR ##############
+    ########################################
+*/
+
 #define X 1024
 
 // Just in case
@@ -27,8 +35,6 @@
 #   define vec float3
 #   include "FluidMaths3D.hlsl"
 #endif
-
-#include "../Grid/ComputeGrid.hlsl"
 
 /*
     ################################
@@ -138,7 +144,12 @@ float2 CalculateDensity(vec pos)
 {
     float2 density = (float2) 0;
 
-     FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
+#ifdef COMPUTE_GRID_ENABLED
+    FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
+#else
+    for (int i = 0; i < numParticles; i++) {
+#endif
+
         float sqrDist = magnitude2(predictedPositions[i] - pos);
         
         InterlockedAdd(stats[3], 1); // Comparisons
@@ -151,8 +162,13 @@ float2 CalculateDensity(vec pos)
         float dst = sqrt(sqrDist);
         density.x += FluidMaths.DensityKernel(dst, kernelRadius);
         density.y += FluidMaths.NearDensityKernel(dst, kernelRadius);
-     FOREACH_ADJACENT_VALUE_END()
 
+#ifdef COMPUTE_GRID_ENABLED
+    FOREACH_ADJACENT_VALUE_END()
+#else
+    }
+#endif
+    
     return density;
 }
 
@@ -240,7 +256,12 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     vec pos = predictedPositions[id.x];
     float sqrRadius = kernelRadius2;
     
+#ifdef COMPUTE_GRID_ENABLED
     FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
+#else
+    for (int i = 0; i < numParticles; i++) {
+#endif
+                    
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
@@ -260,7 +281,12 @@ void Pressure(uint3 id : SV_DispatchThreadID)
 
         pressureForce += dirToNeighbour * FluidMaths.DensityDerivative(dst, kernelRadius) * sharedPressure / neighbourDensity;
         pressureForce += dirToNeighbour * FluidMaths.NearDensityDerivative(dst, kernelRadius) * sharedNearPressure / neighbourNearDensity;
+
+#ifdef COMPUTE_GRID_ENABLED
     FOREACH_ADJACENT_VALUE_END()
+#else
+    }
+#endif
     
     vec acceleration = pressureForce / density;
     velocities[id.x] += acceleration * timeStep;
@@ -280,7 +306,12 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
     vec viscosityForce = 0;
     vec velocity = velocities[id.x];
 
+#ifdef COMPUTE_GRID_ENABLED
     FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
+#else
+    for (int i = 0; i < numParticles; i++) {
+#endif
+                    
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
@@ -290,7 +321,12 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
 		float dst = sqrt(sqrDist);
         vec neighbourVelocity = velocities[i];
         viscosityForce += (neighbourVelocity - velocity) * FluidMaths.ViscosityKernel(dst, kernelRadius);
+
+#ifdef COMPUTE_GRID_ENABLED
     FOREACH_ADJACENT_VALUE_END()
+#else
+    }
+#endif
     
 	velocities[id.x] += viscosityForce * viscosityCoeff * timeStep;
 }

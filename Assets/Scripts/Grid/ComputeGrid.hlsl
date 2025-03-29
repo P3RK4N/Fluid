@@ -1,4 +1,5 @@
-﻿// _bucketCapacity is bucketSize (capacity - 1) + count (1)
+﻿#define COMPUTE_GRID_ENABLED
+// _bucketCapacity is bucketSize (capacity - 1) + count (1)
 
 uint _gridSize;
 uint _gridSize2;
@@ -10,8 +11,8 @@ float _inverseBucketRadius;
 RWStructuredBuffer<uint> IndexGrid;             // id -> xyz
 RWStructuredBuffer<uint> _offsets;
 
-
 // Returns valid bucketIndex for current step (step 0 is identity)
+// TODO: Think of better way since there MUST NOT be collisions between steps. (For now just use next bucket)
 uint _GridHash(uint x, uint step)
 {
     return (x + step * 2) % _gridSize3;
@@ -27,8 +28,7 @@ uint _GridHash(uint x, uint step)
     //return x % _gridSize3;
 }
 
-// TODO: Optimize? 
-// DONE: Add very bigg number to remove negatives (Works only on small coordinates, which are almost all in practice)
+// TODO: Optimize? (DONE: Add very bigg number to remove negatives. Works only on small coordinates, which are almost all in practice.)
 uint3 _umod(int3 val, int n)
 {
     return uint3(val + n * 1000000) % n;

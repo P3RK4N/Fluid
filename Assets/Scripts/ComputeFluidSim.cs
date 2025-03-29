@@ -67,7 +67,7 @@ public class ComputeFluidSim : MonoBehaviour
 
     public bool debugEnabled = false;
 
-    ComputeShader computeShader;
+    ComputeShader computeFluid;
     public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
     ComputeGrid computeGrid;
@@ -83,23 +83,23 @@ public class ComputeFluidSim : MonoBehaviour
         InitializeComputeShader();
         InitializeBuffers();
         InitializePositions();
-        SetBufferData(computeShader, Enum.GetValues(typeof(ComputeKernel)).Length);
+        SetBufferData(computeFluid, Enum.GetValues(typeof(ComputeKernel)).Length);
 
-        computeShader.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
-        computeShader.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
+        computeFluid.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
+        computeFluid.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
     }
 
     void Start()
     {
-        computeGrid.InitializeGrid(predictedPositionBuffer, computeShader, 0, 1, 2, 3, 4);
+        computeGrid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
     }
 
     private void InitializeComputeShader()
     {
         switch (method)
         {
-            case Method.Default: computeShader = defaultFluidCompute; break;
-            case Method.Sebastian: computeShader = sebFluidCompute; break;
+            case Method.Default: computeFluid = defaultFluidCompute; break;
+            case Method.Sebastian: computeFluid = sebFluidCompute; break;
         }
     }
 
@@ -241,7 +241,7 @@ public class ComputeFluidSim : MonoBehaviour
     private void Simulate()
     {
         // Set cbuffer data
-        SetUniformData(computeShader);
+        SetUniformData(computeFluid);
         
         // Fixed timestep simulation
         if (playbackMode == PlaybackMode.Fixed)
@@ -382,11 +382,11 @@ public class ComputeFluidSim : MonoBehaviour
     {
         int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
 
-        computeShader.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
-        computeGrid.RecalculateGrid(kernelRadius, computeShader);
-        computeShader.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
-        computeShader.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
-        computeShader.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);
-        computeShader.Dispatch((int)ComputeKernel.Step, numThreadGroups, 1, 1);
+        computeFluid.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
+        computeGrid.RecalculateGrid(kernelRadius, computeFluid);
+        computeFluid.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
+        computeFluid.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
+        computeFluid.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);
+        computeFluid.Dispatch((int)ComputeKernel.Step, numThreadGroups, 1, 1);
     }
 }

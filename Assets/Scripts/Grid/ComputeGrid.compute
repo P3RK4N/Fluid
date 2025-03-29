@@ -3,11 +3,14 @@
 
 #include "ComputeGrid.hlsl"
 
-// Input data (private)
+//#define DEBUG
+
 uint numPoints;
 RWStructuredBuffer<float3> points;
 
-RWStructuredBuffer<uint> debug;
+#ifdef DEBUG
+    RWStructuredBuffer<uint> debug;
+#endif
 
 void insert(float3 pos, uint value)
 {
@@ -30,7 +33,8 @@ void insert(float3 pos, uint value)
     }
 }
 
-// TODO: Clear only on positions (before predict step aka before positions change)
+// TODO: Clear only on positions (before predict step aka before positions change) 
+//  -> Cannot do since some bucket will clear step 1+ buckets and break cleanup of others
 [numthreads(1024,1,1)]
 void Clear (uint3 id : SV_DispatchThreadID)
 {
@@ -42,8 +46,10 @@ void Clear (uint3 id : SV_DispatchThreadID)
     uint bucketStart = id.x * _bucketCapacity;
     uint bucketCountIndex = bucketStart + _bucketCapacity - 1;
     
+#ifdef DEBUG
     InterlockedAdd(debug[0], IndexGrid[bucketCountIndex]);
     InterlockedMax(debug[1], IndexGrid[bucketCountIndex]);
+#endif
     
     IndexGrid[bucketCountIndex] = 0;
 }

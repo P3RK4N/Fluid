@@ -12,7 +12,7 @@ public class ComputeGrid : MonoBehaviour
     ComputeBuffer points;
 
     ComputeBuffer debugBuffer;
-    uint[] debug = new uint[] { 0, 0, 0, 0, 0, 0, 0 };
+    uint[] debug = new uint[10] { 0, 0, 0, 0, 0, 0, 0, 0, 9, 10 };
 
     void Awake()
     {
@@ -58,7 +58,7 @@ public class ComputeGrid : MonoBehaviour
         computeGrid.Dispatch(0 /* Clear */, Mathf.CeilToInt((float)(gridSize * gridSize * gridSize * bucketCapacity) / 1024), 1, 1);
         computeGrid.Dispatch(1 /* Init  */, Mathf.CeilToInt((float)(points.count) / 1024), 1, 1);
         //printBuckets();
-        debugPrint();
+        //debugPrint();
     }
 
     private void OnDestroy()
