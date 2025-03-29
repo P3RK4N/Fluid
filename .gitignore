@@ -150,6 +150,7 @@ StyleCopReport.xml
 *.ilk
 *.meta
 *.obj
+!**/Mesh/*.obj
 *.iobj
 *.pch
 *.pdb
