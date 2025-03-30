@@ -1,0 +1,234 @@
+#pragma kernel Clear
+#pragma kernel PrimitivesDist
+#pragma kernel MeshDist
+
+float3 boundsMin;
+float3 boundsMax;
+int resolution;
+
+uint numSpheres;
+uint numBoxes;
+
+RWStructuredBuffer<float4x4> Boxes;
+RWStructuredBuffer<float4> Spheres;
+
+uint numIndices;
+RWStructuredBuffer<float3> MeshVertices;
+RWStructuredBuffer<float3> MeshNormals;
+RWStructuredBuffer<uint> MeshIndices;
+
+RWTexture3D<float> Field;
+
+/*
+    Unsigned Distance to triangle
+    https://iquilezles.org/articles/triangledistance/
+*/
+float dot2(in float3 v)
+{
+    return dot(v, v);
+}
+
+float udTriangle(in float3 v1, in float3 v2, in float3 v3, in float3 p)
+{
+    // prepare data    
+    float3 v21 = v2 - v1;
+    float3 p1 = p - v1;
+    float3 v32 = v3 - v2;
+    float3 p2 = p - v2;
+    float3 v13 = v1 - v3;
+    float3 p3 = p - v3;
+    float3 nor = cross(v21, v13);
+
+    return sqrt
+    (   
+        // inside/outside test    
+        (sign(dot(cross(v21, nor), p1)) +
+        sign(dot(cross(v32, nor), p2)) +
+        sign(dot(cross(v13, nor), p3)) < 2.0)
+        ?
+        // 3 edges    
+        min(min(
+        dot2(v21 * clamp(dot(v21, p1) / dot2(v21), 0.0, 1.0) - p1),
+        dot2(v32 * clamp(dot(v32, p2) / dot2(v32), 0.0, 1.0) - p2)),
+        dot2(v13 * clamp(dot(v13, p3) / dot2(v13), 0.0, 1.0) - p3))
+        :
+        // 1 face    
+        dot(nor, p1) * dot(nor, p1) / dot2(nor)
+    );
+}
+
+
+/*
+    Closest point on triangle
+    https://stackoverflow.com/questions/2924795/fastest-way-to-compute-point-to-triangle-distance-in-3d
+*/
+float3 closestPointTriangle(in float3 p, in float3 a, in float3 b, in float3 c)
+{
+    float3 ab = b - a;
+    float3 ac = c - a;
+    float3 ap = p - a;
+
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0.0f && d2 <= 0.0f)
+        return a; // #1
+
+    float3 bp = p - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0.0f && d4 <= d3)
+        return b; // #2
+
+    float3 cp = p - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0.0f && d5 <= d6)
+        return c; // #3
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+    {
+        float v = d1 / (d1 - d3);
+        return a + v * ab; // #4
+    }
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+    {
+        float v = d2 / (d2 - d6);
+        return a + v * ac; // #5
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+    {
+        float v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return b + v * (c - b); // #6
+    }
+
+    float denom = 1.0f / (va + vb + vc);
+    float v = vb * denom;
+    float w = vc * denom;
+    return a + v * ab + w * ac; // #0
+}
+
+float3 interpolateNormal(in float3 p, in float3 v0, in float3 v1, in float3 v2, in float3 n0, in float3 n1, in float3 n2)
+{
+    // Compute the edges
+    float3 edge0 = v1 - v0;
+    float3 edge1 = v2 - v0;
+    float3 edge2 = p - v0;
+
+    // Compute area of the full triangle using cross product
+    float area = length(cross(edge0, edge1));
+
+    // Compute barycentric coordinates
+    float u = length(cross(edge2, edge1)) / area;
+    float v = length(cross(edge0, edge2)) / area;
+    float w = 1.0 - u - v; // Ensure weights sum to 1
+
+    // Interpolate the normal using barycentric coordinates
+    return normalize(n0 * w + n1 * u + n2 * v);
+}
+
+float3 getTriangleNormal(in float3 v0, in float3 v1, in float3 v2)
+{
+    return normalize(cross(v1 - v0, v2 - v0));
+}
+
+void calculateSphere(int i, uint3 coords)
+{
+    // Retrieve sphere data
+    float3 spherePos = Spheres[i].xyz;
+    float radius = Spheres[i].w;
+
+    // Convert voxel coordinates to world space
+    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+    
+    float dist = distance(worldPos, spherePos);
+    Field[coords] = dist <= radius ? 1.0f : Field[coords];
+}
+
+void calculateBox(int i, uint3 coords)
+{
+    // Convert voxel coordinates to world space
+    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+
+    // Transform the world position into local space using the inverse of the box's transformation matrix
+    float3 localPos = mul(Boxes[i], float4(worldPos, 1.0)).xyz;
+
+    // Check if the point is inside the box (assumed to be centered at (0, 0, 0) in local space)
+    bool isInside = abs(localPos.x) <= 0.5f &&
+                    abs(localPos.y) <= 0.5f &&
+                    abs(localPos.z) <= 0.5f;
+    
+    Field[coords] = isInside ? 1.0f : Field[coords];
+}
+
+void calculateMesh(uint3 coords)
+{
+    // Convert voxel coordinates to world space
+    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+
+    float minDist = 1e6;
+    bool isInside = false;
+    
+    for (int i = 0; i < numIndices; i += 3)
+    {
+        float3 a = MeshVertices[MeshIndices[i]];
+        float3 b = MeshVertices[MeshIndices[i + 1]];
+        float3 c = MeshVertices[MeshIndices[i + 2]];
+        
+        float3 an = MeshNormals[MeshIndices[i]];
+        float3 bn = MeshNormals[MeshIndices[i + 1]];
+        float3 cn = MeshNormals[MeshIndices[i + 2]];
+        
+        float3 closestPoint = closestPointTriangle(worldPos, a, b, c);
+        float distanceToTriangle = distance(closestPoint, worldPos);
+        
+        if (distanceToTriangle < minDist)
+        {
+            minDist = distanceToTriangle;
+            float3 closestPointNormal= interpolateNormal(closestPoint, a, b, c, an, bn, cn);
+            isInside = dot(closestPointNormal, (worldPos - closestPoint)) <= 0.0f; // Signed distance to closest point
+        }
+    }
+    
+    Field[coords] = isInside ? 1.0f : Field[coords];
+}
+
+[numthreads(8, 8, 8)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+        return;
+    
+    Field[id.xyz].x = 0.0f;
+}
+
+[numthreads(8,8,8)]
+void PrimitivesDist(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+        return;
+    
+    for (int i = 0; i < numSpheres; i++)
+    {
+        calculateSphere(i, id);
+    }
+
+    for (int i = 0; i < numBoxes; i++)
+    {
+        calculateBox(i, id);
+    }
+
+}
+
+[numthreads(8, 8, 8)]
+void MeshDist(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+        return;
+    
+    calculateMesh(id);
+}

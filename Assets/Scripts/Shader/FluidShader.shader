@@ -37,7 +37,6 @@
                     float _VelocityCoeff;
                     float _ParticleRadius;
                 CBUFFER_END
-            
 
                 StructuredBuffer<float3> positions;
                 StructuredBuffer<float3> velocities;
