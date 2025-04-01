@@ -1,4 +1,4 @@
-    Shader "Unlit/SdfShader"
+    Shader "Unlit/SdfValueShader"
     {
         Properties
         {
@@ -58,7 +58,9 @@
                     float val = SAMPLE_TEXTURE3D_LOD(_MainTex, sampler_MainTex, getUVW(x, y, z), 0).r;
                     float size = (_MaxBound.x - _MinBound.x) / _Resolution;
 
-                    o.positionCS = TransformWorldToHClip(v.positionOS * size * 0.95f * val + getOffset(x, y, z));
+                    float inside = val <= 1e-1 ? 1.0f : 0.0f;
+
+                    o.positionCS = TransformWorldToHClip(v.positionOS * size * 0.95f * inside + getOffset(x, y, z));
                     o.normalWS = TransformObjectToWorldNormal(v.normalOS);
                     return o;
                 }

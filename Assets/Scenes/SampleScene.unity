@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sdfCompute: {fileID: 7200000, guid: d634a5fe207d9704b85e79a51de8b654, type: 3}
-  resolution: 100
+  resolution: 30
   enableDebugView: 0
 --- !u!114 &180700812
 MonoBehaviour:
@@ -166,9 +166,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9fbf56bfcf607d41864e4a2f64ee1f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sdfMaterial: {fileID: 2100000, guid: 9c7b5b48d02d7b5418fb1bb68a75e71c, type: 2}
+  sdfValueMaterial: {fileID: 2100000, guid: 9c7b5b48d02d7b5418fb1bb68a75e71c, type: 2}
+  sdfGradientMaterial: {fileID: 2100000, guid: dbb6866ba1870e542a2611b958c1cf51, type: 2}
   mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
-  resolution: 100
+  debugValues: 0
+  debugNormals: 1
+  resolution: 50
 --- !u!1001 &295277429
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -758,13 +761,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 956590994}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.32, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: 0.20657109, y: 0.29698223, z: 0.06597014, w: 0.9299344}
+  m_LocalPosition: {x: 1.32, y: -0.000000029832, z: 1.39}
+  m_LocalScale: {x: 2.2514, y: 1, z: 2.1461}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 766409450}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 20.182, y: 38.135, z: 15.156}
 --- !u!65 &956590996
 BoxCollider:
   m_ObjectHideFlags: 0

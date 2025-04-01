@@ -9,7 +9,13 @@ int resolution;
 uint numSpheres;
 uint numBoxes;
 
-RWStructuredBuffer<float4x4> Boxes;
+struct BoxInfo
+{
+    float4x4 inverseTR;
+    float4 scale;
+};
+
+RWStructuredBuffer<BoxInfo> Boxes;
 RWStructuredBuffer<float4> Spheres;
 
 uint numIndices;
@@ -112,6 +118,12 @@ float3 closestPointTriangle(in float3 p, in float3 a, in float3 b, in float3 c)
     return a + v * ab + w * ac; // #0
 }
 
+float sdBox(float3 p, float3 b)
+{
+    float3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
 float3 interpolateNormal(in float3 p, in float3 v0, in float3 v1, in float3 v2, in float3 n0, in float3 n1, in float3 n2)
 {
     // Compute the edges
@@ -146,7 +158,7 @@ void calculateSphere(int i, uint3 coords)
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
     
     float dist = distance(worldPos, spherePos);
-    Field[coords] = dist <= radius ? 1.0f : Field[coords];
+    Field[coords] = min(dist - radius, Field[coords]);
 }
 
 void calculateBox(int i, uint3 coords)
@@ -155,14 +167,11 @@ void calculateBox(int i, uint3 coords)
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
 
     // Transform the world position into local space using the inverse of the box's transformation matrix
-    float3 localPos = mul(Boxes[i], float4(worldPos, 1.0)).xyz;
+    float3 localPos = mul(Boxes[i].inverseTR, float4(worldPos, 1.0)).xyz;
 
-    // Check if the point is inside the box (assumed to be centered at (0, 0, 0) in local space)
-    bool isInside = abs(localPos.x) <= 0.5f &&
-                    abs(localPos.y) <= 0.5f &&
-                    abs(localPos.z) <= 0.5f;
+    float signedDistance = sdBox(localPos, Boxes[i].scale.xyz / 2.0f);
     
-    Field[coords] = isInside ? 1.0f : Field[coords];
+    Field[coords] = min(signedDistance, Field[coords]);
 }
 
 void calculateMesh(uint3 coords)
@@ -170,7 +179,7 @@ void calculateMesh(uint3 coords)
     // Convert voxel coordinates to world space
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
 
-    float minDist = 1e6;
+    float minDistance = 1e6;
     bool isInside = false;
     
     for (int i = 0; i < numIndices; i += 3)
@@ -186,15 +195,16 @@ void calculateMesh(uint3 coords)
         float3 closestPoint = closestPointTriangle(worldPos, a, b, c);
         float distanceToTriangle = distance(closestPoint, worldPos);
         
-        if (distanceToTriangle < minDist)
+        if (distanceToTriangle < minDistance)
         {
-            minDist = distanceToTriangle;
-            float3 closestPointNormal= interpolateNormal(closestPoint, a, b, c, an, bn, cn);
-            isInside = dot(closestPointNormal, (worldPos - closestPoint)) <= 0.0f; // Signed distance to closest point
+            minDistance = distanceToTriangle;
+            float3 closestPointNormal = interpolateNormal(closestPoint, a, b, c, an, bn, cn);
+            isInside = dot(closestPointNormal, (worldPos - closestPoint)) <= 0.0f; // SD to triangle plane
         }
     }
     
-    Field[coords] = isInside ? 1.0f : Field[coords];
+    float minSignedDistance = minDistance * (isInside ? -1 : 1);
+    Field[coords] = min(minSignedDistance, Field[coords]);
 }
 
 [numthreads(8, 8, 8)]
@@ -203,7 +213,7 @@ void Clear(uint3 id : SV_DispatchThreadID)
     if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
         return;
     
-    Field[id.xyz].x = 0.0f;
+    Field[id.xyz].x = 1e6;
 }
 
 [numthreads(8,8,8)]
