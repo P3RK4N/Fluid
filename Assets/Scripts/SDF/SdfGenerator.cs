@@ -56,7 +56,7 @@ public class SdfGenerator : MonoBehaviour
             }
         }
 
-        field = new RenderTexture(resolution, resolution, 0, RenderTextureFormat.RFloat);
+        field = new RenderTexture(resolution, resolution, 0, RenderTextureFormat.ARGBFloat);
         field.enableRandomWrite = true;
         field.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         field.filterMode = FilterMode.Bilinear;

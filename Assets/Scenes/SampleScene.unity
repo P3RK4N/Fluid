@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sdfCompute: {fileID: 7200000, guid: d634a5fe207d9704b85e79a51de8b654, type: 3}
-  resolution: 30
+  resolution: 100
   enableDebugView: 0
 --- !u!114 &180700812
 MonoBehaviour:
@@ -171,7 +171,7 @@ MonoBehaviour:
   mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
   debugValues: 0
   debugNormals: 1
-  resolution: 50
+  resolution: 100
 --- !u!1001 &295277429
 PrefabInstance:
   m_ObjectHideFlags: 0

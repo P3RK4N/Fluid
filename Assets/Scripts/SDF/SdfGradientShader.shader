@@ -15,6 +15,8 @@
                 #pragma geometry geom
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl" 
 
+                #define ENABLE_SDF_NORMAL
+
                 struct v2g
                 {
                     float3 worldPos : TEXCOORD0;
@@ -70,6 +72,9 @@
                     o.gradient = normalize(gradient);
                     o.value = val;
 
+#ifdef ENABLE_SDF_NORMAL
+                    o.gradient = SAMPLE_TEXTURE3D_LOD(_MainTex, sampler_MainTex, getUVW(x, y, z), 0).gba;
+#endif
                     return o;
                 }
                 
@@ -78,19 +83,25 @@
                 {
                     g2f outputVertex;
 
-                    if (input[0].value > -0.3f) return;
+                    if (input[0].value > -0.0f) return;
 
                     // Base color (e.g., normalized gradient color)
                     float3 color = abs(input[0].gradient);
     
                     // First vertex (arrow base)
                     outputVertex.pos = TransformWorldToHClip(input[0].worldPos);
-                    outputVertex.color = color;
+                    outputVertex.color = float3(1,0,0);
                     outputStream.Append(outputVertex);
 
                     // Second vertex (arrow tip)
+#ifndef ENABLE_SDF_NORMAL
                     float3 tipPosition = input[0].worldPos + input[0].gradient * input[0].value;
+#else
+                    float3 tipPosition = input[0].worldPos + input[0].gradient;
+#endif
+
                     outputVertex.pos = TransformWorldToHClip(tipPosition);
+                    outputVertex.color = float3(0,1,0);
                     outputStream.Append(outputVertex);
 
                     outputStream.RestartStrip();
@@ -98,7 +109,7 @@
 
                 float4 frag (g2f i) : SV_Target
                 {
-                    return float4(1, 0, 0, 1.0);
+                    return float4(i.color, 1.0);
                     // float3 lightDir = normalize(_MainLightPosition.xyz);
                     // float diff = max(dot(i.normalWS, lightDir), 0.2);
                     // float3 lighting = _MainLightColor.rgb * diff;

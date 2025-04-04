@@ -2,6 +2,8 @@
 #pragma kernel PrimitivesDist
 #pragma kernel MeshDist
 
+#define ENABLE_SDF_NORMAL
+
 float3 boundsMin;
 float3 boundsMax;
 int resolution;
@@ -23,17 +25,23 @@ RWStructuredBuffer<float3> MeshVertices;
 RWStructuredBuffer<float3> MeshNormals;
 RWStructuredBuffer<uint> MeshIndices;
 
-RWTexture3D<float> Field;
+#ifndef ENABLE_SDF_NORMAL
+#   define FieldVal float
+    RWTexture3D<float> Field;
+#else
+#   define FieldVal float4
+    RWTexture3D<float4> Field;
+#endif
 
-/*
-    Unsigned Distance to triangle
-    https://iquilezles.org/articles/triangledistance/
-*/
 float dot2(in float3 v)
 {
     return dot(v, v);
 }
 
+/*
+    Unsigned Distance to triangle
+    https://iquilezles.org/articles/triangledistance/
+*/
 float udTriangle(in float3 v1, in float3 v2, in float3 v3, in float3 p)
 {
     // prepare data    
@@ -150,6 +158,8 @@ float3 getTriangleNormal(in float3 v0, in float3 v1, in float3 v2)
 
 void calculateSphere(int i, uint3 coords)
 {
+    FieldVal fieldVal = Field[coords];
+    
     // Retrieve sphere data
     float3 spherePos = Spheres[i].xyz;
     float radius = Spheres[i].w;
@@ -158,11 +168,25 @@ void calculateSphere(int i, uint3 coords)
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
     
     float dist = distance(worldPos, spherePos);
-    Field[coords] = min(dist - radius, Field[coords]);
+    
+#ifdef ENABLE_SDF_NORMAL
+    if (dist - radius < fieldVal.r)
+    {
+        float3 normal = normalize(worldPos - spherePos);
+        float3 spherePoint = spherePos + normal * radius;
+        fieldVal.gba = spherePoint - worldPos;
+    }
+#endif
+    
+    fieldVal.r = min(dist - radius, fieldVal.r);
+    
+    Field[coords.xyz] = fieldVal;
 }
 
 void calculateBox(int i, uint3 coords)
 {
+    FieldVal fieldVal = Field[coords.xyz];
+    
     // Convert voxel coordinates to world space
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
 
@@ -171,17 +195,32 @@ void calculateBox(int i, uint3 coords)
 
     float signedDistance = sdBox(localPos, Boxes[i].scale.xyz / 2.0f);
     
-    Field[coords] = min(signedDistance, Field[coords]);
+#ifdef ENABLE_SDF_NORMAL
+    if (signedDistance < fieldVal.r)
+    {
+        fieldVal.gba = (float3) 0;
+    }
+#endif    
+
+    fieldVal.r = min(signedDistance, fieldVal.r);
+
+    Field[coords.xyz] = fieldVal;
 }
 
 void calculateMesh(uint3 coords)
 {
+    FieldVal fieldVal = Field[coords.xyz];
+    
     // Convert voxel coordinates to world space
     float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
 
     float minDistance = 1e6;
     bool isInside = false;
     
+#ifdef ENABLE_SDF_NORMAL
+    float3 normal = (float3) 0;
+#endif
+
     for (int i = 0; i < numIndices; i += 3)
     {
         float3 a = MeshVertices[MeshIndices[i]];
@@ -200,11 +239,25 @@ void calculateMesh(uint3 coords)
             minDistance = distanceToTriangle;
             float3 closestPointNormal = interpolateNormal(closestPoint, a, b, c, an, bn, cn);
             isInside = dot(closestPointNormal, (worldPos - closestPoint)) <= 0.0f; // SD to triangle plane
+            
+#ifdef ENABLE_SDF_NORMAL
+            normal = closestPoint - worldPos;
+#endif
         }
     }
     
     float minSignedDistance = minDistance * (isInside ? -1 : 1);
-    Field[coords] = min(minSignedDistance, Field[coords]);
+    
+#ifdef ENABLE_SDF_NORMAL
+    if (minSignedDistance < fieldVal.r)
+    {
+        fieldVal.gba = normal;
+    }
+#endif
+    
+    fieldVal.r = min(minSignedDistance, fieldVal.r);
+    
+    Field[coords.xyz] = fieldVal;
 }
 
 [numthreads(8, 8, 8)]
@@ -213,7 +266,9 @@ void Clear(uint3 id : SV_DispatchThreadID)
     if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
         return;
     
-    Field[id.xyz].x = 1e6;
+    FieldVal val = Field[id.xyz];
+    val.r = 1e6;
+    Field[id.xyz] = val;
 }
 
 [numthreads(8,8,8)]
