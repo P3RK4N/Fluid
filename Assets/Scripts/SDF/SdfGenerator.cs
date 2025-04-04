@@ -32,7 +32,20 @@ public class SdfGenerator : MonoBehaviour
     void Awake()
     {
         sdfBounds = GetComponent<BoxCollider>();
+        //GenerateSdf();
+    }
+
+    public void InitializeSdf(ComputeShader computeShader, params int[] kernels)
+    {
         GenerateSdf();
+
+        computeShader.SetVector("_sdfBoundsMin", sdfBounds.bounds.min);
+        computeShader.SetVector("_sdfBoundsMax", sdfBounds.bounds.max);
+        computeShader.SetInt("_sdfResolution", resolution);
+        foreach (var kernel in kernels)
+        {
+            computeShader.SetTexture(kernel, "FieldTexture", field, 0); 
+        }
     }
 
     public void GenerateSdf(Transform tf = null)
@@ -69,9 +82,9 @@ public class SdfGenerator : MonoBehaviour
 
     private void computeDistance()
     {
-        sdfCompute.SetVector("boundsMin", sdfBounds.bounds.min);
-        sdfCompute.SetVector("boundsMax", sdfBounds.bounds.max);
-        sdfCompute.SetInt("resolution", resolution);
+        sdfCompute.SetVector("_sdfBoundsMin", sdfBounds.bounds.min);
+        sdfCompute.SetVector("_sdfBoundsMax", sdfBounds.bounds.max);
+        sdfCompute.SetInt("_sdfResolution", resolution);
         sdfCompute.SetTexture(0, "Field", field, 0);
         sdfCompute.SetTexture(1, "Field", field, 0);
         sdfCompute.SetTexture(2, "Field", field, 0);
@@ -112,24 +125,26 @@ public class SdfGenerator : MonoBehaviour
         }
         
         sdfCompute.SetInt("numSpheres", spheres.Count);
-        if (spheres.Count > 0)
+        sphereBuffer = new ComputeBuffer(Mathf.Max(1, spheres.Count), sizeof(float) * 4);
+        sdfCompute.SetBuffer(0, "Spheres", sphereBuffer);
+        sdfCompute.SetBuffer(1, "Spheres", sphereBuffer);
+        sdfCompute.SetBuffer(2, "Spheres", sphereBuffer);
+        if (boxes.Count > 0)
         {
-            sphereBuffer = new ComputeBuffer(spheres.Count, sizeof(float) * 4);
             sphereBuffer.SetData(spheres);
-            sdfCompute.SetBuffer(0, "Spheres", sphereBuffer);
-            sdfCompute.SetBuffer(1, "Spheres", sphereBuffer);
-            sdfCompute.SetBuffer(2, "Spheres", sphereBuffer);
         }
 
         sdfCompute.SetInt("numBoxes", boxes.Count);
+        boxBuffer = new ComputeBuffer(Mathf.Max(1, boxes.Count), sizeof(float) * 20);
+        sdfCompute.SetBuffer(0, "Boxes", boxBuffer);
+        sdfCompute.SetBuffer(1, "Boxes", boxBuffer);
+        sdfCompute.SetBuffer(2, "Boxes", boxBuffer);
         if (boxes.Count > 0)
         {
-            boxBuffer = new ComputeBuffer(boxes.Count, sizeof(float) * 20);
             boxBuffer.SetData(boxes);
-            sdfCompute.SetBuffer(0, "Boxes", boxBuffer);
-            sdfCompute.SetBuffer(1, "Boxes", boxBuffer);
-            sdfCompute.SetBuffer(2, "Boxes", boxBuffer);
         }
+
+        Debug.Log($"{boxes.Count} {spheres.Count}");
 
         // Primitives
         sdfCompute.Dispatch(1, numGroups, numGroups, numGroups);

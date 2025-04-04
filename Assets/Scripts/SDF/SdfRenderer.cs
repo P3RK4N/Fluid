@@ -32,7 +32,7 @@ public class SdfRenderer : MonoBehaviour
 
     void Update()
     {
-        if (sdf == null) return;
+        if (sdf == null || sdf.field == null) return;
 
         if (debugValues)
         {

@@ -7,6 +7,7 @@
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
 #include "../Grid/ComputeGrid.hlsl"
+#include "../SDF/ComputeSdf.hlsl"
 
 /*
     ########################################
@@ -111,7 +112,17 @@ float3 to_float3(float3 val)
     ################################
 */
 
-void resolveCollisions(uint i)
+void resolveSdfCollisions(uint i)
+{
+    FieldVal val = GET_SDF_VALUE(to_float3(positions[i]));
+    if (val.r < particleRadius)
+    {
+        velocities[i] = restitutionCoeff * reflect(velocities[i], val.gba);
+        positions[i] += normalize(val.gba) * (particleRadius - val.r) * (val.r <= 0.0f ? 1 : -1);
+    }
+}
+
+void resolveBoundaryCollisions(uint i)
 {
     float3 halfBound = float3(.5f, .5f, .5f) * scale - particleRadius;
     
@@ -341,5 +352,7 @@ void Step(uint3 id : SV_DispatchThreadID)
         return;
     
     positions[id.x] += velocities[id.x] * timeStep;
-    resolveCollisions(id.x);
+    
+    resolveSdfCollisions(id.x);
+    resolveBoundaryCollisions(id.x);
 }

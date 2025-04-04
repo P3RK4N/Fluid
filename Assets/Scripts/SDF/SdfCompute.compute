@@ -2,11 +2,7 @@
 #pragma kernel PrimitivesDist
 #pragma kernel MeshDist
 
-#define ENABLE_SDF_NORMAL
-
-float3 boundsMin;
-float3 boundsMax;
-int resolution;
+#include "ComputeSdf.hlsl"
 
 uint numSpheres;
 uint numBoxes;
@@ -25,13 +21,12 @@ RWStructuredBuffer<float3> MeshVertices;
 RWStructuredBuffer<float3> MeshNormals;
 RWStructuredBuffer<uint> MeshIndices;
 
-#ifndef ENABLE_SDF_NORMAL
-#   define FieldVal float
-    RWTexture3D<float> Field;
-#else
-#   define FieldVal float4
-    RWTexture3D<float4> Field;
-#endif
+/*
+##################################################################
+########################  HELPER  ################################
+##################################################################
+*/
+
 
 float dot2(in float3 v)
 {
@@ -70,7 +65,6 @@ float udTriangle(in float3 v1, in float3 v2, in float3 v3, in float3 p)
         dot(nor, p1) * dot(nor, p1) / dot2(nor)
     );
 }
-
 
 /*
     Closest point on triangle
@@ -156,6 +150,12 @@ float3 getTriangleNormal(in float3 v0, in float3 v1, in float3 v2)
     return normalize(cross(v1 - v0, v2 - v0));
 }
 
+/*
+##################################################################
+####################  DISTANCE FUNCS  ############################
+##################################################################
+*/
+
 void calculateSphere(int i, uint3 coords)
 {
     FieldVal fieldVal = Field[coords];
@@ -165,7 +165,7 @@ void calculateSphere(int i, uint3 coords)
     float radius = Spheres[i].w;
 
     // Convert voxel coordinates to world space
-    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+    float3 worldPos = lerp(_sdfBoundsMin, _sdfBoundsMax, (float3(coords) + 0.5f) / _sdfResolution);
     
     float dist = distance(worldPos, spherePos);
     
@@ -188,7 +188,7 @@ void calculateBox(int i, uint3 coords)
     FieldVal fieldVal = Field[coords.xyz];
     
     // Convert voxel coordinates to world space
-    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+    float3 worldPos = lerp(_sdfBoundsMin, _sdfBoundsMax, (float3(coords) + 0.5f) / _sdfResolution);
 
     // Transform the world position into local space using the inverse of the box's transformation matrix
     float3 localPos = mul(Boxes[i].inverseTR, float4(worldPos, 1.0)).xyz;
@@ -212,7 +212,7 @@ void calculateMesh(uint3 coords)
     FieldVal fieldVal = Field[coords.xyz];
     
     // Convert voxel coordinates to world space
-    float3 worldPos = lerp(boundsMin, boundsMax, (float3(coords) + 0.5f) / resolution);
+    float3 worldPos = lerp(_sdfBoundsMin, _sdfBoundsMax, (float3(coords) + 0.5f) / _sdfResolution);
 
     float minDistance = 1e6;
     bool isInside = false;
@@ -260,21 +260,32 @@ void calculateMesh(uint3 coords)
     Field[coords.xyz] = fieldVal;
 }
 
+/*
+##################################################################
+########################  KERNEL  ################################
+##################################################################
+*/
+
 [numthreads(8, 8, 8)]
 void Clear(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+    if (id.x >= _sdfResolution || id.y >= _sdfResolution || id.z >= _sdfResolution)
         return;
     
     FieldVal val = Field[id.xyz];
     val.r = 1e6;
+    
+#ifdef ENABLE_SDF_NORMAL
+    val.gba = (float3) 0;
+#endif
+    
     Field[id.xyz] = val;
 }
 
 [numthreads(8,8,8)]
 void PrimitivesDist(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+    if (id.x >= _sdfResolution || id.y >= _sdfResolution || id.z >= _sdfResolution)
         return;
     
     for (int i = 0; i < numSpheres; i++)
@@ -292,7 +303,7 @@ void PrimitivesDist(uint3 id : SV_DispatchThreadID)
 [numthreads(8, 8, 8)]
 void MeshDist(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= resolution || id.y >= resolution || id.z >= resolution)
+    if (id.x >= _sdfResolution || id.y >= _sdfResolution || id.z >= _sdfResolution)
         return;
     
     calculateMesh(id);

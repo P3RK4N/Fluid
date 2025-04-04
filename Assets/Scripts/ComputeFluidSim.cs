@@ -49,7 +49,7 @@ public class ComputeFluidSim : MonoBehaviour
 
     [Header("Particle Properties")]
 
-    public float particleRadius = 0.01f;
+    [EditorOnly] public float particleRadius = 0.01f;
     public float particleMass = 0.001f;
     public float targetDensity = 1000.0f;
     public float pressureCoeff = 1.0f;
@@ -71,6 +71,7 @@ public class ComputeFluidSim : MonoBehaviour
     public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
     ComputeGrid computeGrid;
+    SdfGenerator sdf;
 
     int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
@@ -80,6 +81,8 @@ public class ComputeFluidSim : MonoBehaviour
         Time.maximumDeltaTime = Time.fixedDeltaTime;
 
         computeGrid = GetComponent<ComputeGrid>();
+        sdf = GetComponent<SdfGenerator>();
+
         InitializeComputeShader();
         InitializeBuffers();
         SetBufferData(computeFluid, Enum.GetValues(typeof(ComputeKernel)).Length);
@@ -91,6 +94,7 @@ public class ComputeFluidSim : MonoBehaviour
     void Start()
     {
         computeGrid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
+        sdf?.InitializeSdf(computeFluid, 0, 1, 2, 3, 4); 
     }
 
     private void InitializeComputeShader()
