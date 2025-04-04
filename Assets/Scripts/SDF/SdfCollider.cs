@@ -20,7 +20,7 @@ public class SdfCollider : MonoBehaviour
             // Check if MeshCollider is using a skinned mesh or convex (which is deformable)
             if (mesh.sharedMesh.isReadable == false)
             {
-                Debug.LogError("MeshCollider is deformable or invalid! Removing component.", this);
+                Debug.LogError("MeshCollider is not readable! Removing component.", this);
                 Destroy(this);
                 return;
             }

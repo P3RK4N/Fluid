@@ -82,7 +82,6 @@ public class ComputeFluidSim : MonoBehaviour
         computeGrid = GetComponent<ComputeGrid>();
         InitializeComputeShader();
         InitializeBuffers();
-        InitializePositions();
         SetBufferData(computeFluid, Enum.GetValues(typeof(ComputeKernel)).Length);
 
         computeFluid.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
@@ -100,45 +99,6 @@ public class ComputeFluidSim : MonoBehaviour
         {
             case Method.Default: computeFluid = defaultFluidCompute; break;
             case Method.Sebastian: computeFluid = sebFluidCompute; break;
-        }
-    }
-
-    private void InitializePositions()
-    {
-        float preferred_width = 10.0f;
-        Vector3 width = new Vector3(Mathf.Min(preferred_width, transform.localScale.x), Mathf.Min(preferred_width, transform.localScale.y), Mathf.Min(preferred_width, transform.localScale.z));
-        Vector3 halfWidth = width / 2.0f;
-        var mat = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
-
-        // For 2D
-        if (dimension == Dimension.Dimension2D)
-        {
-            Vector2[] initialPositions = new Vector2[numParticles];
-            int rowSize = Mathf.CeilToInt(Mathf.Sqrt((float)numParticles));
-            Vector3 spacing = width / rowSize;
-            for (int i = 0; i < numParticles; i++)
-            {
-                int x = i / rowSize;
-                int y = i % rowSize;
-                initialPositions[i] = mat * new Vector4(spacing.x * x - halfWidth.x, spacing.x * y - halfWidth.x, 0, 1);
-            }
-            positionBuffer.SetData(initialPositions);
-        }
-        // For 3D
-        else
-        {
-            Vector3[] initialPositions = new Vector3[numParticles];
-            int rowSize = Mathf.CeilToInt(Mathf.Pow((float)numParticles, 1.0f / 3.0f));
-            int sliceSize = rowSize * rowSize;
-            Vector3 spacing = width / rowSize;
-            for (int i = 0; i < numParticles; i++)
-            {
-                int x = i / sliceSize;
-                int y = (i % sliceSize) / rowSize;
-                int z = i % rowSize;
-                initialPositions[i] = mat * new Vector4(spacing.x * x - halfWidth.x, spacing.y * y - halfWidth.y, spacing.z * z - halfWidth.z, 1.0f);
-            }
-            positionBuffer.SetData(initialPositions);
         }
     }
 
