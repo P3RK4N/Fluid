@@ -4,21 +4,21 @@ using static ComputeFluidSim;
 
 public class ComputeFluidSimSpawner : MonoBehaviour
 {
-    [EditorOnly] public float size = 1.0f;
-    [EditorOnly] public Vector3 offset = Vector3.zero;
+    [EditorOnly] public Transform childBounds;
 
     ComputeFluidSim sim;
-    Transform childBounds;
 
     private void Awake()
     {
         sim = GetComponent<ComputeFluidSim>();
-        childBounds = transform.GetChild(0);
     }
 
     private void Start()
     {
-        spawn(childBounds, sim.positionBuffer, sim.dimension);
+        if (childBounds != null)
+        {
+            spawn(childBounds, sim.positionBuffer, sim.dimension);
+        }
     }
 
     private void spawn(Transform tf, ComputeBuffer positionBuffer, Dimension dimension)

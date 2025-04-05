@@ -342,7 +342,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 			sampler2D _DistortionMap;
 			sampler2D _Foam_Texture;
 			sampler2D _FoamMask;
@@ -1062,7 +1062,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 
 
 			float3 mod2D289( float3 x ) { return x - floor( x * ( 1.0 / 289.0 ) ) * 289.0; }
@@ -1425,7 +1425,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 
 
 			float3 mod2D289( float3 x ) { return x - floor( x * ( 1.0 / 289.0 ) ) * 289.0; }
@@ -1778,7 +1778,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 			sampler2D _DistortionMap;
 			sampler2D _Foam_Texture;
 			sampler2D _FoamMask;
@@ -2300,7 +2300,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 			sampler2D _DistortionMap;
 			sampler2D _Foam_Texture;
 			sampler2D _FoamMask;
@@ -2761,7 +2761,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 
 
 			float3 mod2D289( float3 x ) { return x - floor( x * ( 1.0 / 289.0 ) ) * 289.0; }
@@ -3148,7 +3148,7 @@ Shader "SyntyStudios/WaterShader"
 			#endif
 			CBUFFER_END
 			sampler2D _WaveMask;
-			uniform float4 _CameraDepthTexture_TexelSize;
+			// uniform float4 _CameraDepthTexture_TexelSize;
 			sampler2D _DistortionMap;
 			sampler2D _Foam_Texture;
 			sampler2D _FoamMask;

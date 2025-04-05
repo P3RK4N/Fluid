@@ -6,6 +6,8 @@
 
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
+#include "../../SDF/Compute/ComputeSdf.hlsl"
+
 #define X 1024
 
 // Just in case
@@ -103,6 +105,19 @@ float3 to_float3(float3 val)
     ############# SIM ##############
     ################################
 */
+
+void resolveSdfCollisions(uint i)
+{
+    FieldVal val = GET_SDF_VALUE(to_float3(positions[i]));
+    if (val.r < particleRadius)
+    {
+        velocities[i] = restitutionCoeff * reflect(velocities[i], val.gba);
+        
+        // Pushes particle outside, including radius, causes jittering (You can bake margin inside SDF for better result)
+        // positions[i] += normalize(val.gba) * (particleRadius - val.r) * (val.r <= 0.0f ? 1 : -1);
+        positions[i] += val.gba;
+    }
+}
 
 void resolveCollisions(uint i)
 {
@@ -306,5 +321,6 @@ void Step(uint3 id : SV_DispatchThreadID)
         return;
     
     positions[id.x] += velocities[id.x] * timeStep;
+    resolveSdfCollisions(id.x);
     resolveCollisions(id.x);
 }

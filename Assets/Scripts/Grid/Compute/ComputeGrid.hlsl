@@ -28,7 +28,7 @@ uint _GridHash(uint x, uint step)
     //return x % _gridSize3;
 }
 
-// TODO: Optimize? (DONE: Add very bigg number to remove negatives. Works only on small coordinates, which are almost all in practice.)
+// TODO: Optimize? (DONE: Add very bigg number to remove negatives. Works only on small coordinates -> almost all in practice)
 uint3 _umod(int3 val, int n)
 {
     return uint3(val + n * 1000000) % n;

@@ -69,9 +69,6 @@ RWStructuredBuffer<vec> velocities;
 RWStructuredBuffer<vec> forces;
 RWStructuredBuffer<float> densities;
 
-RWStructuredBuffer<BlockIndex> blockIndex;
-RWStructuredBuffer<uint> reverseIndex;
-
 RWTexture2D<float4> result;
 
 RWStructuredBuffer<int> stats; 

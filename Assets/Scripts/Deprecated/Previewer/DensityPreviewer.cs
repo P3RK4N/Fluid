@@ -26,8 +26,6 @@ public class DensityPreviewer : Previewer
     [SerializeField]
     public float deltaTime = 0.001f;
 
-    float e = 1e-6f;
-
     public FluidSim2D sim;
 
     protected override void preDraw()

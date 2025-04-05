@@ -6,25 +6,6 @@
 
 /*
     ################################
-    ########### STRUCTS ############
-    ################################
-*/
-
-#define IndexRes 10
-#define BucketSize 100
-
-struct Block
-{
-    uint bucket[BucketSize + 1]; // Last is for count
-};
-
-struct BlockIndex
-{
-    Block blocks[IndexRes][IndexRes][IndexRes];
-};
-
-/*
-    ################################
     ############ DATA ##############
     ################################
 */
@@ -54,9 +35,6 @@ RWStructuredBuffer<float2> positions;
 RWStructuredBuffer<float2> velocities;
 RWStructuredBuffer<float2> forces;
 RWStructuredBuffer<float> densities;
-
-RWStructuredBuffer<BlockIndex> blockIndex;
-RWStructuredBuffer<uint> reverseIndex;
 
 RWTexture2D<float4> result;
 
@@ -164,7 +142,7 @@ void Draw(uint3 id : SV_DispatchThreadID)
     float2 ncoords = float2((float) coords.x / w - 0.5f, (float) coords.y / h - 0.5f);
     float2 tcoords = mul(trsMat, float4(ncoords, 0.0f, 1.0f)).xy;
     
-    float density = particleMass * sampleKernelAt(tcoords);
+    float density = sampleKernelAt(tcoords);
     float pressure = getPressureFromDensity(density);
     
     // Gather some stats
@@ -196,7 +174,7 @@ void Draw(uint3 id : SV_DispatchThreadID)
     float4 neg = float4(1.0f, 0.0f, 0.0f, 1.0f);
     float4 zero = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 pos = float4(0.0f, 0.0f, 1.0f, 1.0f);
-    result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 0.1f) : lerp(zero, pos, pressure * 0.1f);
+    result[coords.xy] = pressure < 0.0f ? lerp(zero, neg, -pressure * 0.0001f) : lerp(zero, pos, pressure * 0.0001f);
 }
 
 [numthreads(X, 1, 1)]

@@ -4,6 +4,9 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+[RequireComponent(typeof(ComputeFluidSimSpawner))]
+[RequireComponent(typeof(ComputeGrid))]
+[RequireComponent(typeof(ComputeSdf))]
 public class ComputeFluidSim : MonoBehaviour
 {
     public static readonly int X = 1024;
@@ -70,8 +73,8 @@ public class ComputeFluidSim : MonoBehaviour
     ComputeShader computeFluid;
     public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
 
-    ComputeGrid computeGrid;
-    SdfGenerator sdf;
+    ComputeGrid grid;
+    ComputeSdf sdf;
 
     int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
@@ -80,8 +83,8 @@ public class ComputeFluidSim : MonoBehaviour
     {
         Time.maximumDeltaTime = Time.fixedDeltaTime;
 
-        computeGrid = GetComponent<ComputeGrid>();
-        sdf = GetComponent<SdfGenerator>();
+        grid = GetComponent<ComputeGrid>();
+        sdf = GetComponent<ComputeSdf>();
 
         InitializeComputeShader();
         InitializeBuffers();
@@ -93,8 +96,8 @@ public class ComputeFluidSim : MonoBehaviour
 
     void Start()
     {
-        computeGrid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
-        sdf?.InitializeSdf(computeFluid, 0, 1, 2, 3, 4); 
+        grid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
+        sdf?.InitializeSdf(computeFluid, particleRadius, 0, 1, 2, 3, 4); 
     }
 
     private void InitializeComputeShader()
@@ -258,25 +261,25 @@ public class ComputeFluidSim : MonoBehaviour
         predictedPositionBuffer.GetData(predictedPositions);
 
         // CPU predicted index
-        BucketIndex<Vector3> cpuIndex = new BucketIndex<Vector3>(kernelRadius, computeGrid.gridSize, computeGrid.gridSize, computeGrid.gridSize);
+        BucketIndex<Vector3> cpuIndex = new BucketIndex<Vector3>(kernelRadius, grid.gridSize, grid.gridSize, grid.gridSize);
         for (int i = 0; i < numParticles; i++) cpuIndex.put(i, predictedPositions[i]);
 
         // GPU predicted index
-        uint[] data = new uint[computeGrid.gridSize * computeGrid.gridSize * computeGrid.gridSize * computeGrid.bucketCapacity];
-        computeGrid.gridBuffer.GetData(data);
+        uint[] data = new uint[grid.gridSize * grid.gridSize * grid.gridSize * grid.bucketCapacity];
+        grid.gridBuffer.GetData(data);
 
         // Define the dimensions
-        int bucketSize = computeGrid.bucketCapacity - 1; // Size of each bucket excluding the count
+        int bucketSize = grid.bucketCapacity - 1; // Size of each bucket excluding the count
 
         // Iterate through the data array
-        int totalBuckets = computeGrid.gridSize * computeGrid.gridSize * computeGrid.gridSize; // Total number of buckets in the grid
+        int totalBuckets = grid.gridSize * grid.gridSize * grid.gridSize; // Total number of buckets in the grid
         int numInserted = 0;
 
         for (int i = 0; i < totalBuckets; i++)
         {
             // Calculate the index of the last element in the current bucket (count element)
-            int lastElementIndex = (i + 1) * computeGrid.bucketCapacity - 1;
-            int firstElementIndex = i * computeGrid.bucketCapacity;
+            int lastElementIndex = (i + 1) * grid.bucketCapacity - 1;
+            int firstElementIndex = i * grid.bucketCapacity;
 
             // Get the count from the last element of the bucket
             uint count = data[lastElementIndex];
@@ -287,9 +290,9 @@ public class ComputeFluidSim : MonoBehaviour
             //if (count > 0)
             {
                 // Calculate the 4D index from the flattened index
-                int x = i / (computeGrid.gridSize * computeGrid.gridSize);
-                int y = (i / computeGrid.gridSize) % computeGrid.gridSize;
-                int z = i % computeGrid.gridSize;
+                int x = i / (grid.gridSize * grid.gridSize);
+                int y = (i / grid.gridSize) % grid.gridSize;
+                int z = i % grid.gridSize;
 
                 var cpuBucket = cpuIndex.getBucket(new Vector3Int(x, y, z));
                 cpuBucket.Sort();
@@ -347,7 +350,7 @@ public class ComputeFluidSim : MonoBehaviour
         int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
 
         computeFluid.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
-        computeGrid.RecalculateGrid(kernelRadius, computeFluid);
+        grid.RecalculateGrid(kernelRadius, computeFluid);
         computeFluid.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
         computeFluid.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
         computeFluid.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);

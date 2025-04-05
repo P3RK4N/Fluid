@@ -12,7 +12,7 @@ public class SdfRenderer : MonoBehaviour
     public bool debugNormals = false;
     public int resolution = 20;
 
-    SdfGenerator sdf;
+    ComputeSdf sdf;
     new Collider collider;
 
     RenderParams rpValue;
@@ -20,7 +20,7 @@ public class SdfRenderer : MonoBehaviour
 
     private void Awake()
     {
-        sdf = GetComponent<SdfGenerator>();
+        sdf = GetComponent<ComputeSdf>();
         collider = GetComponent<Collider>();
 
         rpValue = new RenderParams(sdfValueMaterial);
@@ -55,46 +55,4 @@ public class SdfRenderer : MonoBehaviour
         }
     }
 
-    private void OnDrawGizmos()
-    {
-        return;
-        if (!Application.isPlaying || !debugNormals) return;
-
-        Vector3 boundsMin = collider.bounds.min;
-        Vector3 boundsMax = collider.bounds.max;
-
-        // Resolution of 20 per axis
-        int res = 20;
-        float halfPixel = 0.5f / res;
-
-        // Iterate through the resolution and draw cubes
-        for (int x = 0; x < res; x++)
-        {
-            for (int y = 0; y < res; y++)
-            {
-                for (int z = 0; z < res; z++)
-                {
-                    // Get the position of the current point in the grid
-                    Vector3 point = new Vector3(
-                        Mathf.Lerp(boundsMin.x, boundsMax.x, (float)x / res + halfPixel),
-                        Mathf.Lerp(boundsMin.y, boundsMax.y, (float)y / res + halfPixel),
-                        Mathf.Lerp(boundsMin.z, boundsMax.z, (float)z / res + halfPixel)
-                    );
-
-                    // Convert grid position to texture space (UVW)
-                    Vector3 uvw = sdf.positionToUVW(point.x, point.y, point.z);
-
-                    // Get the value from the field (grayscale value)
-                    //float value = field.GetPixelBilinear(uvw.x - halfPixel, uvw.y - halfPixel, uvw.z - halfPixel).r;
-                    float value = 0;
-
-                    // Set the Gizmo color based on the value (grayscale)
-                    Gizmos.color = new Color(value, value, value, value);
-
-                    // Draw a small cube at the point
-                    Gizmos.DrawCube(point, Vector3.one * 0.1f);
-                }
-            }
-        }
-    }
 }

@@ -6,8 +6,8 @@
 
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
-#include "../Grid/ComputeGrid.hlsl"
-#include "../SDF/ComputeSdf.hlsl"
+#include "../../Grid/Compute/ComputeGrid.hlsl"
+#include "../../SDF/Compute/ComputeSdf.hlsl"
 
 /*
     ########################################
@@ -118,7 +118,10 @@ void resolveSdfCollisions(uint i)
     if (val.r < particleRadius)
     {
         velocities[i] = restitutionCoeff * reflect(velocities[i], val.gba);
-        positions[i] += normalize(val.gba) * (particleRadius - val.r) * (val.r <= 0.0f ? 1 : -1);
+        
+        // Pushes particle outside, including radius, causes jittering (You can bake margin inside SDF for better result)
+        // positions[i] += normalize(val.gba) * (particleRadius - val.r) * (val.r <= 0.0f ? 1 : -1);
+        positions[i] += val.gba;
     }
 }
 

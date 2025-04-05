@@ -63,8 +63,8 @@ public class ComputeGrid : MonoBehaviour
 
     private void OnDestroy()
     {
-        gridBuffer.Release();
-        debugBuffer.Release();
+        gridBuffer?.Release();
+        debugBuffer?.Release();
     }
 
 #region Debug

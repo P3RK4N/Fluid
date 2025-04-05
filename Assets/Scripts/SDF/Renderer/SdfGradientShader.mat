@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: SdfGradientShader
-  m_Shader: {fileID: 4800000, guid: e50b5eb81fe66d14f9c4fbc4267b9c7e, type: 3}
+  m_Shader: {fileID: 4800000, guid: c75d745b764628b41ac8d05ed5654a39, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

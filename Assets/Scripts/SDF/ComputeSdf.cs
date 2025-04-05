@@ -5,11 +5,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(BoxCollider))]
-public class SdfGenerator : MonoBehaviour
+public class ComputeSdf : MonoBehaviour
 {
     [EditorOnly] public ComputeShader sdfCompute;
     [EditorOnly] public int resolution = 10;
-    public bool enableDebugView = false;
 
     BoxCollider sdfBounds;
     List<Collider> collidingObjects;
@@ -22,22 +21,23 @@ public class SdfGenerator : MonoBehaviour
 
     public RenderTexture field { get; private set; }
 
-    [StructLayout(LayoutKind.Sequential, Pack = 4, Size = 80)]
+    [StructLayout(LayoutKind.Sequential, Pack = 4, Size = 144)]
     struct BoxInfo
     {
         public Matrix4x4 inverseTR;
+        public Matrix4x4 TR;
         public Vector4 scale;
     }
 
     void Awake()
     {
         sdfBounds = GetComponent<BoxCollider>();
-        //GenerateSdf();
+        GenerateSdf();
     }
 
-    public void InitializeSdf(ComputeShader computeShader, params int[] kernels)
+    public void InitializeSdf(ComputeShader computeShader, float margin, params int[] kernels)
     {
-        GenerateSdf();
+        GenerateSdf(null, margin);
 
         computeShader.SetVector("_sdfBoundsMin", sdfBounds.bounds.min);
         computeShader.SetVector("_sdfBoundsMax", sdfBounds.bounds.max);
@@ -48,7 +48,7 @@ public class SdfGenerator : MonoBehaviour
         }
     }
 
-    public void GenerateSdf(Transform tf = null)
+    public void GenerateSdf(Transform tf = null, float margin = 0.0f)
     {
         if (tf)
         {
@@ -77,14 +77,15 @@ public class SdfGenerator : MonoBehaviour
         field.volumeDepth = resolution;
         field.Create();
 
-        computeDistance();
+        computeDistance(margin);
     }
 
-    private void computeDistance()
+    private void computeDistance(float margin)
     {
         sdfCompute.SetVector("_sdfBoundsMin", sdfBounds.bounds.min);
         sdfCompute.SetVector("_sdfBoundsMax", sdfBounds.bounds.max);
         sdfCompute.SetInt("_sdfResolution", resolution);
+        sdfCompute.SetFloat("margin", margin);
         sdfCompute.SetTexture(0, "Field", field, 0);
         sdfCompute.SetTexture(1, "Field", field, 0);
         sdfCompute.SetTexture(2, "Field", field, 0);
@@ -109,12 +110,12 @@ public class SdfGenerator : MonoBehaviour
                 vec.z = p.z;
                 vec.w = sphere.radius;
                 spheres.Add(vec);
-                Debug.Log(vec);
             }
             else if (collidingObject is BoxCollider box)
             {
                 BoxInfo boxInfo = new BoxInfo();
-                boxInfo.inverseTR = Matrix4x4.TRS(box.transform.position, box.transform.rotation, Vector3.one).inverse;
+                boxInfo.TR = Matrix4x4.TRS(box.transform.position, box.transform.rotation, Vector3.one);
+                boxInfo.inverseTR = boxInfo.TR.inverse;
                 boxInfo.scale = box.transform.localScale;
                 boxes.Add(boxInfo);
             }
@@ -124,18 +125,19 @@ public class SdfGenerator : MonoBehaviour
             }
         }
         
+
         sdfCompute.SetInt("numSpheres", spheres.Count);
         sphereBuffer = new ComputeBuffer(Mathf.Max(1, spheres.Count), sizeof(float) * 4);
         sdfCompute.SetBuffer(0, "Spheres", sphereBuffer);
         sdfCompute.SetBuffer(1, "Spheres", sphereBuffer);
         sdfCompute.SetBuffer(2, "Spheres", sphereBuffer);
-        if (boxes.Count > 0)
+        if (spheres.Count > 0)
         {
             sphereBuffer.SetData(spheres);
         }
 
         sdfCompute.SetInt("numBoxes", boxes.Count);
-        boxBuffer = new ComputeBuffer(Mathf.Max(1, boxes.Count), sizeof(float) * 20);
+        boxBuffer = new ComputeBuffer(Mathf.Max(1, boxes.Count), sizeof(float) * 36);
         sdfCompute.SetBuffer(0, "Boxes", boxBuffer);
         sdfCompute.SetBuffer(1, "Boxes", boxBuffer);
         sdfCompute.SetBuffer(2, "Boxes", boxBuffer);
@@ -144,7 +146,7 @@ public class SdfGenerator : MonoBehaviour
             boxBuffer.SetData(boxes);
         }
 
-        Debug.Log($"{boxes.Count} {spheres.Count}");
+        Debug.Log($"Boxes {boxes.Count} | Spheres {spheres.Count}");
 
         // Primitives
         sdfCompute.Dispatch(1, numGroups, numGroups, numGroups);
@@ -214,25 +216,12 @@ public class SdfGenerator : MonoBehaviour
         return new Vector3(u, v, w);
     }
 
-    private bool IsPointInsideOrCloseToCollider(Vector3 point)
+    private void OnDestroy()
     {
-        foreach (var collider in collidingObjects)
-        {
-            // Get the closest point on the collider to the test point
-            Vector3 closestPoint = collider.ClosestPoint(point);
-
-            // Calculate distance from the point to the closest point on the collider
-            float distance = Vector3.Distance(point, closestPoint);
-
-            // You can set a threshold distance for "close enough" (optional)
-            float threshold = 0.0f; // Adjust threshold as needed
-
-            if (distance <= threshold)
-            {
-                return true;
-            }
-        }
-        return false;
+        sphereBuffer?.Release();
+        boxBuffer?.Release();
+        verticesBuffer?.Release();
+        normalsBuffer?.Release();
+        indicesBuffer?.Release();
     }
-
 }

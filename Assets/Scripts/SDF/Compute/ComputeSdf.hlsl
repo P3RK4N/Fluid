@@ -1,22 +1,20 @@
 ﻿#define COMPUTE_SDF_ENABLED
 
-// Enable this for now (stores normals to nearest surfaces instead of signed distances)
-#define ENABLE_SDF_NORMAL
+#define ENABLE_SDF_NORMAL // Stores normals to nearest surfaces in addition to the signed distance
+#define ENABLE_SDF_MARGIN // Pushes colliders outwards by a margin (Useful if particles have radius)
 
 float3 _sdfBoundsMin;
 float3 _sdfBoundsMax;
-int _sdfResolution;
+uint _sdfResolution;
 
 #ifndef ENABLE_SDF_NORMAL
 #   define FieldVal float
-    RWTexture3D<float> Field;
-    Texture3D<float> FieldTexture;
 #else
 #   define FieldVal float4
-    RWTexture3D<float4> Field;
-    Texture3D<float4> FieldTexture;
 #endif
 
+RWTexture3D<FieldVal> Field;
+Texture3D<FieldVal> FieldTexture;
 SamplerState samplerFieldTexture;
 
 float3 _getUVWFromWorld(float3 worldPos)

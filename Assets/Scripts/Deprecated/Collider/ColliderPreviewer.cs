@@ -13,13 +13,13 @@ public class ColliderPreviewer : Previewer
     [SerializeField]
     Vector2 testPoint = Vector2.zero;
 
-    [SerializeField]
-    float testRadius = 0.01f;
+    //[SerializeField]
+    //float testRadius = 0.01f;
 
     [SerializeField]
     float thickness = 0.01f;
 
-    FluidCollider<Vector2> collider;
+    new FluidCollider<Vector2> collider;
 
     protected override void preDraw()
     {
