@@ -75,8 +75,9 @@ public class ComputeFluidSim : MonoBehaviour
 
     ComputeGrid grid;
     ComputeSdf sdf;
+    ComputeCollider computeCollider;
 
-    int[] stats = new int[10] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    int[] stats = new int[30] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
 
     void Awake()
@@ -85,6 +86,7 @@ public class ComputeFluidSim : MonoBehaviour
 
         grid = GetComponent<ComputeGrid>();
         sdf = GetComponent<ComputeSdf>();
+        computeCollider = GetComponent<ComputeCollider>();
 
         InitializeComputeShader();
         InitializeBuffers();
@@ -97,7 +99,8 @@ public class ComputeFluidSim : MonoBehaviour
     void Start()
     {
         grid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
-        sdf?.InitializeSdf(computeFluid, particleRadius, 0, 1, 2, 3, 4); 
+        sdf?.InitializeSdf(computeFluid, particleRadius, 0, 1, 2, 3, 4);
+        computeCollider?.InitializeCollider(computeFluid, 0, 1, 2, 3, 4);
     }
 
     private void InitializeComputeShader()
@@ -209,6 +212,9 @@ public class ComputeFluidSim : MonoBehaviour
     {
         // Set cbuffer data
         SetUniformData(computeFluid);
+
+        // Update colliders
+        computeCollider?.CollidersBegin(computeFluid, particleRadius, restitutionCoeff);
         
         // Fixed timestep simulation
         if (playbackMode == PlaybackMode.Fixed)
@@ -238,23 +244,29 @@ public class ComputeFluidSim : MonoBehaviour
             if (debugEnabled) DisplayStats();
         }
 
+        computeCollider?.CollidersEnd();
     }
 
     private void DisplayStats()
     {
         statsBuffer.GetData(stats);
-        Debug.Log
-        (
-            $"Max density: {stats[0] / 1000.0f}\n" +
-            $"Min Pressure: {stats[1] / 1000.0f}\n" +
-            $"Max pressure: {stats[2] / 1000.0f}\n" +
-            $"Comparisons: {stats[3]}\n" +
-            $"Neighbor passes: {stats[4]}\n" +
-            $"Wrap of (0,0,-0.27f): {stats[5]} at size {stats[6]}\n"
-        );
 
+        if (stats[10] == 1 || stats[11] == 1 || stats[12] == 1 || stats[13] == 1)
+        {
+            Debug.Log
+            (
+                $"Max density: {stats[0] / 1000.0f}\n" +
+                $"Min Pressure: {stats[1] / 1000.0f}\n" +
+                $"Max pressure: {stats[2] / 1000.0f}\n" +
+                $"Comparisons: {stats[3]}\n" +
+                $"Neighbor passes: {stats[4]}\n"
+            );
+        }
+        
         for (int i = 0; i < stats.Length; i++) stats[i] = 0;
         statsBuffer.SetData(stats);
+
+        return;
 
         // Predicted positions
         Vector3[] predictedPositions = new Vector3[numParticles];

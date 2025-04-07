@@ -8,6 +8,7 @@
 
 #include "../../Grid/Compute/ComputeGrid.hlsl"
 #include "../../SDF/Compute/ComputeSdf.hlsl"
+#include "../../Collider/Compute/ComputeCollider.hlsl"
 
 /*
     ########################################
@@ -112,26 +113,21 @@ float3 to_float3(float3 val)
     ################################
 */
 
-void resolveSdfCollisions(uint i)
+void resolveSdfCollisions(inout float3 pos, inout float3 vel)
 {
-    FieldVal val = GET_SDF_VALUE(to_float3(positions[i]));
-    if (val.r < particleRadius)
+    FieldVal val = GET_SDF_VALUE(pos); // We baked particle radius inside SDF as "margin" from colliders
+    if (val.r <= particleRadius / 5.0f) // If we allow particle to enter a collider a bit, it will cause pseudo drip
     {
-        velocities[i] = restitutionCoeff * reflect(velocities[i], val.gba);
-        
-        // Pushes particle outside, including radius, causes jittering (You can bake margin inside SDF for better result)
-        // positions[i] += normalize(val.gba) * (particleRadius - val.r) * (val.r <= 0.0f ? 1 : -1);
-        positions[i] += val.gba;
+        vel = restitutionCoeff * reflect(vel, val.gba);
+        pos += val.gba;
     }
 }
 
-void resolveBoundaryCollisions(uint i)
+void resolveBoundaryCollisions(inout float3 pos, inout float3 vel)
 {
     float3 halfBound = float3(.5f, .5f, .5f) * scale - particleRadius;
     
-    float3 pos = to_float3(positions[i]);
     float3 local_pos = mul(trMatInv, float4(pos, 1.0f)).xyz;
-    float3 vel = to_float3(velocities[i]);
     float3 local_vel = mul((float3x3) trMatInv, vel);
 
     if (abs(local_pos.x) > halfBound.x)
@@ -150,8 +146,8 @@ void resolveBoundaryCollisions(uint i)
         local_vel.z *= -1 * restitutionCoeff;
     }
     
-    positions[i] = mul(trMat, float4(local_pos, 1.0f));
-    velocities[i] = mul((float3x3) trMat, local_vel);
+    pos = mul(trMat, float4(local_pos, 1.0f));
+    vel = mul((float3x3) trMat, local_vel);
 }
 
 float2 CalculateDensity(vec pos)
@@ -166,12 +162,12 @@ float2 CalculateDensity(vec pos)
 
         float sqrDist = magnitude2(predictedPositions[i] - pos);
         
-        InterlockedAdd(stats[3], 1); // Comparisons
+        // InterlockedAdd(stats[3], 1); // Comparisons
         
-        if (sqrDist > kernelRadius2)
+        if (sqrDist >= kernelRadius2)
             continue;
         
-        InterlockedAdd(stats[4], 1); // Neighbor passes
+        // InterlockedAdd(stats[4], 1); // Neighbor passes
 
         float dst = sqrt(sqrDist);
         density.x += FluidMaths.DensityKernel(dst, kernelRadius);
@@ -212,27 +208,9 @@ void Predict(uint3 id : SV_DispatchThreadID)
         return;
     
     // EXTERNAL
-    
     float3 gravity = float3(0, gravityCoeff, 0);
     
-    //if (pointerActive)
-    //{
-    //    float2 inputPointOffset = pointerPos - positions[id.x];
-    //    float sqrDst = dot(inputPointOffset, inputPointOffset);
-    //    if (sqrDst < interactionInputRadius * interactionInputRadius)
-    //    {
-    //        float dst = sqrt(sqrDst);
-    //        float edgeT = (dst / interactionInputRadius);
-    //        float centreT = 1 - edgeT;
-    //        float2 dirToCentre = inputPointOffset / dst;
-
-    //        float gravityWeight = 1 - (centreT * saturate(interactionInputStrength / 10));
-    //        float2 accel = gravityAccel * gravityWeight + dirToCentre * centreT * interactionInputStrength;
-    //        accel -= velocity * centreT;
-    //        return accel;
-    //    }
-    //}
-    
+    // INTEGRATION
     velocities[id.x] += gravity * timeStep;
 
     // PREDICT
@@ -249,7 +227,7 @@ void Density(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
 
-    densities[id.x] = CalculateDensity(predictedPositions[id.x]);
+    densities[id.x] = CalculateDensity(predictedPositions[id.x], id.x);
 }
 
 [numthreads(X, 1, 1)]
@@ -268,18 +246,17 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     vec pressureForce = 0;
 	
     vec pos = predictedPositions[id.x];
-    float sqrRadius = kernelRadius2;
     
 #ifdef COMPUTE_GRID_ENABLED
     FOREACH_ADJACENT_VALUE_BEGIN(to_float3(pos), i)
 #else
     for (int i = 0; i < numParticles; i++) {
 #endif
-                    
+
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
-        if (sqrDist > sqrRadius || i == id.x)
+        if (sqrDist >= kernelRadius2 || i == id.x)
             continue;
         
         float dst = sqrt(sqrDist);
@@ -329,7 +306,7 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
         vec offsetToNeighbour = predictedPositions[i] - pos;
         float sqrDist = magnitude2(offsetToNeighbour);
         
-        if (sqrDist > sqrRadius || i == id.x)
+        if (sqrDist >= sqrRadius || i == id.x)
             continue;
         
 		float dst = sqrt(sqrDist);
@@ -354,8 +331,15 @@ void Step(uint3 id : SV_DispatchThreadID)
     if (id.x >= x)
         return;
     
-    positions[id.x] += velocities[id.x] * timeStep;
+    float3 pos = to_float3(positions[id.x]);
+    float3 vel = to_float3(velocities[id.x]);
     
-    resolveSdfCollisions(id.x);
-    resolveBoundaryCollisions(id.x);
+    pos += vel * timeStep;
+    
+    resolveSdfCollisions(pos, vel);
+    RESOLVE_COLLIDER_COLLISIONS(pos, vel);
+    resolveBoundaryCollisions(pos, vel);
+    
+    positions[id.x] = pos;
+    velocities[id.x] = vel;
 }

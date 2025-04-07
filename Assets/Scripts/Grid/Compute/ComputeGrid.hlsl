@@ -1,4 +1,6 @@
-﻿#define COMPUTE_GRID_ENABLED
+﻿#ifndef COMPUTE_GRID_ENABLED
+#define COMPUTE_GRID_ENABLED
+
 // _bucketCapacity is bucketSize (capacity - 1) + count (1)
 
 uint _gridSize;
@@ -150,3 +152,5 @@ bool _getBucketRange(uint bucketSeed, uint step, out uint bucketStartIndex, out 
 
 
 #define FOREACH_ADJACENT_VALUE_END()   }}}} while (0);
+
+#endif

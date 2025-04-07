@@ -73,7 +73,7 @@ public class ComputeGrid : MonoBehaviour
     {
         debugBuffer.GetData(debug);
 
-        Debug.Log($"Average bucket count {debug[0] / 1.0f / gridSize / gridSize / gridSize}\nMax bucket count {debug[1]}");
+        Debug.Log($"bucket 0 -> {debug[2]} | Max dist from 0 -> {debug[3]} | Max bucket -> {debug[1]}");
 
         for (int i = 0; i < debug.Length; i++)
         {

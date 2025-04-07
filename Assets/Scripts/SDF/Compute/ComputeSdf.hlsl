@@ -1,4 +1,5 @@
-﻿#define COMPUTE_SDF_ENABLED
+﻿#ifndef COMPUTE_SDF_ENABLED
+#define COMPUTE_SDF_ENABLED
 
 #define ENABLE_SDF_NORMAL // Stores normals to nearest surfaces in addition to the signed distance
 #define ENABLE_SDF_MARGIN // Pushes colliders outwards by a margin (Useful if particles have radius)
@@ -23,3 +24,5 @@ float3 _getUVWFromWorld(float3 worldPos)
 }
 
 #define GET_SDF_VALUE(worldPos) FieldTexture.SampleLevel(samplerFieldTexture, _getUVWFromWorld(worldPos), 0)
+
+#endif

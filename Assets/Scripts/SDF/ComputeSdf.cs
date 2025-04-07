@@ -32,7 +32,7 @@ public class ComputeSdf : MonoBehaviour
     void Awake()
     {
         sdfBounds = GetComponent<BoxCollider>();
-        GenerateSdf();
+        //GenerateSdf();
     }
 
     public void InitializeSdf(ComputeShader computeShader, float margin, params int[] kernels)

@@ -1,3 +1,6 @@
+#ifndef FLUID_MATHS_ENABLED
+#define FLUID_MATHS_ENABLED
+
 #define PI 3.14159265359f
 
 struct _FluidMaths
@@ -85,3 +88,5 @@ struct _FluidMaths
 };
 
 _FluidMaths FluidMaths;
+
+#endif

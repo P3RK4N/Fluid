@@ -3,7 +3,7 @@
 
 #include "ComputeGrid.hlsl"
 
-//#define DEBUG
+// #define DEBUG
 
 uint numPoints;
 RWStructuredBuffer<float3> points;
@@ -49,6 +49,11 @@ void Clear (uint3 id : SV_DispatchThreadID)
 #ifdef DEBUG
     InterlockedAdd(debug[0], IndexGrid[bucketCountIndex]);
     InterlockedMax(debug[1], IndexGrid[bucketCountIndex]);
+    
+    if (id.x == 0)
+    {
+        debug[2] = IndexGrid[bucketCountIndex];
+    }
 #endif
     
     IndexGrid[bucketCountIndex] = 0;

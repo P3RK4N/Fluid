@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 4531136528616490631}
   - component: {fileID: 826355332126921328}
   - component: {fileID: 7491299820682030408}
+  - component: {fileID: 864963112766287706}
+  - component: {fileID: 2944419917146687007}
   - component: {fileID: 7145175583330207022}
   - component: {fileID: 6494418974894101448}
   - component: {fileID: 4699336464750270878}
@@ -45,7 +47,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1422738983421900694}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e74391b9a0d523f459793c6c89b5e54a, type: 3}
   m_Name: 
@@ -66,7 +68,7 @@ MonoBehaviour:
   nearPressureCoeff: 2.25
   viscosityCoeff: 0.001
   kernelRadius: 0.2
-  restitutionCoeff: 0.95
+  restitutionCoeff: 0.9
   pointerRadius: 0.3
   pointerStrength: 1
   debugEnabled: 0
@@ -77,7 +79,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1422738983421900694}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a23f2832767c1147bdcdd1ba9acdd79, type: 3}
   m_Name: 
@@ -90,7 +92,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1422738983421900694}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2afa688ba0ecb07468ef08fdaaa4d012, type: 3}
   m_Name: 
@@ -98,6 +100,33 @@ MonoBehaviour:
   computeGrid: {fileID: 7200000, guid: 790bf64140dc9b049939af779ada15fc, type: 3}
   bucketCapacity: 30
   gridSize: 30
+--- !u!114 &864963112766287706
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1422738983421900694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: caf5e71c98c697d44bb51d8566bbb826, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxColliders: 10
+--- !u!114 &2944419917146687007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1422738983421900694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed158b27faf3e96459e10386cf4e88ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mat: {fileID: 2100000, guid: d57de9f67545d0245abd8568c8e7ae41, type: 2}
+  mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!65 &7145175583330207022
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -149,7 +178,7 @@ MonoBehaviour:
   sdfGradientMaterial: {fileID: 2100000, guid: dbb6866ba1870e542a2611b958c1cf51, type: 2}
   mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
   debugValues: 0
-  debugNormals: 0
+  debugNormals: 1
   resolution: 100
 --- !u!1 &1925869560897918117
 GameObject:

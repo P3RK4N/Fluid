@@ -1,3 +1,6 @@
+#ifndef FLUID_MATHS_ENABLED
+#define FLUID_MATHS_ENABLED
+
 const float Poly6ScalingFactor;
 const float SpikyPow3ScalingFactor;
 const float SpikyPow2ScalingFactor;
@@ -83,3 +86,5 @@ struct _FluidMaths
 };
 
 _FluidMaths FluidMaths;
+
+#endif
