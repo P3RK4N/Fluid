@@ -226,8 +226,8 @@ void Density(uint3 id : SV_DispatchThreadID)
 
     if (id.x >= x)
         return;
-
-    densities[id.x] = CalculateDensity(predictedPositions[id.x], id.x);
+    
+    densities[id.x] = CalculateDensity(predictedPositions[id.x]);
 }
 
 [numthreads(X, 1, 1)]

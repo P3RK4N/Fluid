@@ -34,7 +34,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 5, y: 5, z: 5}
+  m_LocalScale: {x: 3.546429, y: 3.546429, z: 3.546429}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 245253514932724826}
@@ -57,7 +57,7 @@ MonoBehaviour:
   dimension: 3
   defaultFluidCompute: {fileID: 7200000, guid: ab4aff7387f040243b34b318dc7acb87, type: 3}
   sebFluidCompute: {fileID: 7200000, guid: caf658126fc3f6149bdba735a309665a, type: 3}
-  numParticles: 30000
+  numParticles: 10000
   maxStepsPerFrame: 3
   timeStep: 0.008333334
   gravityCoeff: -9.81
@@ -142,7 +142,7 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
