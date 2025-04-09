@@ -3,7 +3,7 @@
 #pragma kernel MeshDist
 
 #include "ComputeSdf.hlsl"
-#include "../../Collider/Compute/ColliderUtils.hlsl"
+#include "../../RigidBody/Compute/ColliderUtils.hlsl"
 
 // Scale is separate from matrices for easier
 //  calculations with bodies that have radius

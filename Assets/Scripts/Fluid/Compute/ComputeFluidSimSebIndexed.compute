@@ -8,7 +8,7 @@
 
 #include "../../Grid/Compute/ComputeGrid.hlsl"
 #include "../../SDF/Compute/ComputeSdf.hlsl"
-#include "../../Collider/Compute/ComputeCollider.hlsl"
+#include "../../RigidBody/Compute/ComputeRigidBodySystem.hlsl"
 
 /*
     ########################################
@@ -337,7 +337,7 @@ void Step(uint3 id : SV_DispatchThreadID)
     pos += vel * timeStep;
     
     resolveSdfCollisions(pos, vel);
-    RESOLVE_COLLIDER_COLLISIONS(pos, vel);
+    RESOLVE_COLLIDER_COLLISIONS(pos, vel, particleRadius, restitutionCoeff);
     resolveBoundaryCollisions(pos, vel);
     
     positions[id.x] = pos;

@@ -75,7 +75,7 @@ public class ComputeFluidSim : MonoBehaviour
 
     ComputeGrid grid;
     ComputeSdf sdf;
-    ComputeCollider computeCollider;
+    RigidBodySystem computeCollider;
 
     int[] stats = new int[30] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
@@ -86,7 +86,7 @@ public class ComputeFluidSim : MonoBehaviour
 
         grid = GetComponent<ComputeGrid>();
         sdf = GetComponent<ComputeSdf>();
-        computeCollider = GetComponent<ComputeCollider>();
+        computeCollider = GetComponent<RigidBodySystem>();
 
         InitializeComputeShader();
         InitializeBuffers();
@@ -100,7 +100,7 @@ public class ComputeFluidSim : MonoBehaviour
     {
         grid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
         sdf?.InitializeSdf(computeFluid, particleRadius, 0, 1, 2, 3, 4);
-        computeCollider?.InitializeCollider(computeFluid, 0, 1, 2, 3, 4);
+        computeCollider?.Initialize(computeFluid, null, null, null, 0, 1, 2, 3, 4);
     }
 
     private void InitializeComputeShader()
@@ -214,7 +214,7 @@ public class ComputeFluidSim : MonoBehaviour
         SetUniformData(computeFluid);
 
         // Update colliders
-        computeCollider?.CollidersBegin(computeFluid, particleRadius, restitutionCoeff);
+        computeCollider?.Resolve(computeFluid);
         
         // Fixed timestep simulation
         if (playbackMode == PlaybackMode.Fixed)

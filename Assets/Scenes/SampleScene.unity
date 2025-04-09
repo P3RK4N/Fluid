@@ -200,6 +200,10 @@ PrefabInstance:
       propertyPath: feedbackResolution
       value: 1000000
       objectReference: {fileID: 0}
+    - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: computeRigidBodySystem
+      value: 
+      objectReference: {fileID: 7200000, guid: a8a47085c7efbf043aea3bd950e42cc3, type: 3}
     - target: {fileID: 1402195618558740334, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: m_LocalScale.x
       value: 2.4614592
