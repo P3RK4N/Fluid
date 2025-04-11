@@ -181,24 +181,36 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: maxForce
+      value: 100000
+      objectReference: {fileID: 0}
+    - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: forceCoeff
-      value: 2
+      value: 0.000001
       objectReference: {fileID: 0}
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: torqueCoeff
-      value: 0.1
+      value: 0.000000001
       objectReference: {fileID: 0}
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: dampingCoeff
-      value: 0.07
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: feedbackCoeff
       value: 0.003
       objectReference: {fileID: 0}
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: targetDensity
+      value: 630
+      objectReference: {fileID: 0}
+    - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: colliderResolution
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: feedbackResolution
-      value: 1000000
+      value: 1000
       objectReference: {fileID: 0}
     - target: {fileID: 864963112766287706, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: computeRigidBodySystem
@@ -206,15 +218,15 @@ PrefabInstance:
       objectReference: {fileID: 7200000, guid: a8a47085c7efbf043aea3bd950e42cc3, type: 3}
     - target: {fileID: 1402195618558740334, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: m_LocalScale.x
-      value: 2.4614592
+      value: 3.2011278
       objectReference: {fileID: 0}
     - target: {fileID: 1402195618558740334, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: m_LocalScale.y
-      value: 15.066097
+      value: 3.4145203
       objectReference: {fileID: 0}
     - target: {fileID: 1402195618558740334, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: m_LocalScale.z
-      value: 2.4614592
+      value: 3.2011278
       objectReference: {fileID: 0}
     - target: {fileID: 1402195618558740334, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
       propertyPath: m_LocalPosition.x
@@ -954,7 +966,7 @@ Transform:
   m_GameObject: {fileID: 1006333314}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.10774732, y: -4.697, z: -0.72}
+  m_LocalPosition: {x: 0.10774732, y: -5.58, z: -0.72}
   m_LocalScale: {x: 13.301542, y: 1, z: 15.859944}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1219,7 +1231,7 @@ Transform:
   m_GameObject: {fileID: 1743196265}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.10774732, y: -1.27, z: 0.05}
+  m_LocalPosition: {x: 0, y: 4.13, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1234,8 +1246,8 @@ Rigidbody:
   m_GameObject: {fileID: 1743196265}
   serializedVersion: 4
   m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
+  m_Drag: 0.1
+  m_AngularDrag: 0.1
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -1247,7 +1259,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 0
+  m_UseGravity: 1
   m_IsKinematic: 1
   m_Interpolate: 0
   m_Constraints: 0

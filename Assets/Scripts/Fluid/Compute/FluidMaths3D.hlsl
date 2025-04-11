@@ -16,6 +16,17 @@ struct _FluidMaths
 	    return 0;
     }
 
+    float SmoothingKernelPoly6Smooth(float dst, float radius)
+    {
+        if (dst < radius)
+        {
+            float scale = 315.0 / (64.0 * PI * pow(abs(radius), 9.0));
+            float v = radius * radius - dst * dst;
+            return pow(v, 2.0) * scale * radius; // modified power and compensating scale
+        }
+        return 0.0;
+    }
+
     float SpikyKernelPow3(float dst, float radius)
     {
 	    if (dst < radius)
@@ -84,6 +95,11 @@ struct _FluidMaths
     float ViscosityKernel(float dst, float radius)
     {
 	    return SmoothingKernelPoly6(dst, radius);
+    }
+
+    float RigidBodyKernel(float dst, float radius)
+    {
+        return SmoothingKernelPoly6Smooth(dst, radius);
     }
 };
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
@@ -14,6 +15,8 @@ public class ComputeGrid : MonoBehaviour
     ComputeBuffer debugBuffer;
     uint[] debug = new uint[10] { 0, 0, 0, 0, 0, 0, 0, 0, 9, 10 };
 
+    HashSet<ComputeShader> binded = new();
+
     void Awake()
     {
         gridBuffer = new ComputeBuffer(gridSize * gridSize * gridSize * bucketCapacity, sizeof(uint));
@@ -25,22 +28,23 @@ public class ComputeGrid : MonoBehaviour
         computeGrid.SetBuffer(1, "debug", debugBuffer);
     }
 
-    public void InitializeGrid(ComputeBuffer points, ComputeShader clientShader, params int[] kernels)
+    public void InitializeGrid(ComputeBuffer points)
     {
-        if (points != null)
-        {
-            Debug.Assert(points.count <= gridBuffer.count * 0.75f, "Grid buffer too small, make it bigger!");
+        Debug.Assert(points.count <= gridBuffer.count * 0.75f, "Grid buffer too small, make it bigger!");
 
-            computeGrid.SetInt("_gridSize", gridSize);
-            computeGrid.SetInt("_gridSize2", gridSize * gridSize);
-            computeGrid.SetInt("_gridSize3", gridSize * gridSize * gridSize);
-            computeGrid.SetInt("_bucketCapacity", bucketCapacity);
-            computeGrid.SetInt("numPoints", points.count);
-            computeGrid.SetBuffer(0, "points", points);
-            computeGrid.SetBuffer(1, "points", points);
-            this.points = points;
-        }
+        computeGrid.SetInt("_gridSize", gridSize);
+        computeGrid.SetInt("_gridSize2", gridSize * gridSize);
+        computeGrid.SetInt("_gridSize3", gridSize * gridSize * gridSize);
+        computeGrid.SetInt("_bucketCapacity", bucketCapacity);
+        computeGrid.SetInt("numPoints", points.count);
+        computeGrid.SetBuffer(0, "points", points);
+        computeGrid.SetBuffer(1, "points", points);
+        this.points = points;
+    }
 
+    public void Bind(ComputeShader clientShader, params int[] kernels)
+    {
+        binded.Add(clientShader);
         clientShader.SetInt("_gridSize", gridSize);
         clientShader.SetInt("_gridSize2", gridSize * gridSize);
         clientShader.SetInt("_gridSize3", gridSize * gridSize * gridSize);
@@ -51,10 +55,13 @@ public class ComputeGrid : MonoBehaviour
         }
     }
 
-    public void RecalculateGrid(float bucketRadius, ComputeShader clientShader)
+    public void RecalculateGrid(float bucketRadius)
     {
-        clientShader.SetFloat("_bucketRadius", bucketRadius);
-        clientShader.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
+        foreach (var b in binded)
+        {
+            b.SetFloat("_bucketRadius", bucketRadius);
+            b.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
+        }
         computeGrid.SetFloat("_bucketRadius", bucketRadius);
         computeGrid.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
 

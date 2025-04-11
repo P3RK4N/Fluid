@@ -75,7 +75,7 @@ public class ComputeFluidSim : MonoBehaviour
 
     ComputeGrid grid;
     ComputeSdf sdf;
-    RigidBodySystem computeCollider;
+    RigidBodySystem rbs;
 
     int[] stats = new int[30] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     float simulatedTime = 0.0f;
@@ -86,7 +86,7 @@ public class ComputeFluidSim : MonoBehaviour
 
         grid = GetComponent<ComputeGrid>();
         sdf = GetComponent<ComputeSdf>();
-        computeCollider = GetComponent<RigidBodySystem>();
+        rbs = GetComponent<RigidBodySystem>();
 
         InitializeComputeShader();
         InitializeBuffers();
@@ -94,13 +94,16 @@ public class ComputeFluidSim : MonoBehaviour
 
         computeFluid.EnableKeyword(dimension == Dimension.Dimension2D ? "DISABLE_3D" : "ENABLE_3D");
         computeFluid.DisableKeyword(dimension == Dimension.Dimension2D ? "ENABLE_3D" : "DISABLE_3D");
+
+        Physics.simulationMode = SimulationMode.Script;
     }
 
     void Start()
     {
-        grid?.InitializeGrid(predictedPositionBuffer, computeFluid, 0, 1, 2, 3, 4);
+        grid?.InitializeGrid(predictedPositionBuffer);
+        grid?.Bind(computeFluid, 0, 1, 2, 3, 4);
         sdf?.InitializeSdf(computeFluid, particleRadius, 0, 1, 2, 3, 4);
-        computeCollider?.Initialize(computeFluid, null, null, null, 0, 1, 2, 3, 4);
+        rbs?.Initialize(computeFluid, predictedPositionBuffer, densityBuffer, grid, 0, 1, 2, 3, 4);
     }
 
     private void InitializeComputeShader()
@@ -118,16 +121,12 @@ public class ComputeFluidSim : MonoBehaviour
         int densityCount = method == Method.Sebastian ? 2 : 1;
 
         positionBuffer = new ComputeBuffer(numParticles, stride);
+        predictedPositionBuffer = new ComputeBuffer(numParticles, stride);
         velocityBuffer = new ComputeBuffer(numParticles, stride);
         forceBuffer = new ComputeBuffer(numParticles, stride);
         densityBuffer = new ComputeBuffer(numParticles, sizeof(float) * densityCount);
         statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint));
         statsBuffer.SetData(stats);
-
-        if (method == Method.Sebastian)
-        {
-            predictedPositionBuffer = new ComputeBuffer(numParticles, stride);
-        }
     }
 
     public void SetBufferData(ComputeShader cs, int numKernels)
@@ -213,9 +212,6 @@ public class ComputeFluidSim : MonoBehaviour
         // Set cbuffer data
         SetUniformData(computeFluid);
 
-        // Update colliders
-        computeCollider?.Resolve(computeFluid);
-        
         // Fixed timestep simulation
         if (playbackMode == PlaybackMode.Fixed)
         {
@@ -243,8 +239,6 @@ public class ComputeFluidSim : MonoBehaviour
             DispatchStep();
             if (debugEnabled) DisplayStats();
         }
-
-        computeCollider?.CollidersEnd();
     }
 
     private void DisplayStats()
@@ -362,10 +356,12 @@ public class ComputeFluidSim : MonoBehaviour
         int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
 
         computeFluid.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
-        grid.RecalculateGrid(kernelRadius, computeFluid);
+        grid?.RecalculateGrid(kernelRadius);
         computeFluid.Dispatch((int)ComputeKernel.Density, numThreadGroups, 1, 1);
         computeFluid.Dispatch((int)ComputeKernel.Pressure, numThreadGroups, 1, 1);
         computeFluid.Dispatch((int)ComputeKernel.Viscosity, numThreadGroups, 1, 1);
+        rbs?.Resolve(computeFluid, kernelRadius, targetDensity, pressureCoeff, nearPressureCoeff);
+        Physics.Simulate(timeStep);
         computeFluid.Dispatch((int)ComputeKernel.Step, numThreadGroups, 1, 1);
     }
 }

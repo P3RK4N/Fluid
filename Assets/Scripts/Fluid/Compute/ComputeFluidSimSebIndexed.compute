@@ -55,7 +55,7 @@ float particleMass;
 float restitutionCoeff;
 float targetDensity;
 float pressureCoeff;
-float nearPressureCoef;
+float nearPressureCoeff;
 float viscosityCoeff;
 float gravityCoeff;
 float kernelRadius;
@@ -189,7 +189,7 @@ float PressureFromDensity(float density)
 
 float NearPressureFromDensity(float nearDensity)
 {
-    return nearPressureCoef * nearDensity;
+    return nearPressureCoeff * nearDensity;
 }
 
 /*

@@ -55,7 +55,7 @@
                 float4 frag (Varyings i) : SV_Target
                 {
                     float3 lightDir = normalize(_MainLightPosition.xyz);
-                    float diff = max(dot(i.normalWS, lightDir), 0);
+                    float diff = max(dot(i.normalWS, lightDir), 0.2);
                     float3 lighting = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainLightColor.rgb * diff;
                     return float4(lighting, 1.0);
                 }

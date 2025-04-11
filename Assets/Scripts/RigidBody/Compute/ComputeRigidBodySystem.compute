@@ -1,9 +1,113 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel ApplyFeedback
 
+#include "ComputeRigidBodySystem.hlsl"
+#include "../../Fluid/Compute/FluidMaths3D.hlsl"
 #include "../../Grid/Compute/ComputeGrid.hlsl"
+
+RWStructuredBuffer<float3> positions;
+RWStructuredBuffer<float2> densities;
+
+RWStructuredBuffer<float4> rigidParticles;
+float kernelRadius;
+float targetDensity;
+float pressureCoeff;
+float nearPressureCoeff;
+float dampingCoeff;
+int feedbackResolution;
+
+RWStructuredBuffer<float4> debugBuffer;
+
+float dot2(float3 a)
+{
+    return dot(a, a);
+}
+
+float PressureFromDensity(float density)
+{
+    return (density - targetDensity) * pressureCoeff;
+}
+
+float NearPressureFromDensity(float nearDensity)
+{
+    return nearPressureCoeff * nearDensity;
+}
 
 [numthreads(1024,1,1)]
 void ApplyFeedback (uint3 id : SV_DispatchThreadID)
 {
+    uint x, _;
+    rigidParticles.GetDimensions(x, _);
+    
+    if (id.x >= x)
+        return;
+    
+    int rigidBodyIndex = int(round(rigidParticles[id.x].w));
+    RigidBodyInfo info = _RigidBodyInfos[rigidBodyIndex];
+    
+    float3 p = mul(info.TR, float4(rigidParticles[id.x].xyz * 0.8f, 1.0f)).xyz;
+    float2 pDensity = 0.0f;
+    float3 pressureForce = (float3) 0;
+    
+    FOREACH_ADJACENT_VALUE_BEGIN(p, i)
+                    
+        float sqrDist = dot2(positions[i] - p);
+        
+        if (sqrDist >= kernelRadius * kernelRadius)
+            continue;
+        
+        float dst = sqrt(sqrDist);
+        pDensity.x += FluidMaths.DensityKernel(dst, kernelRadius);
+        pDensity.y += FluidMaths.NearDensityKernel(dst, kernelRadius);
+
+    FOREACH_ADJACENT_VALUE_END()
+    
+    float pressure = PressureFromDensity(pDensity[0]);
+    
+    FOREACH_ADJACENT_VALUE_BEGIN(p, i)
+                    
+                    float3 offsetToNeighbour = positions[i] - p;
+                    float sqrDist = dot2(offsetToNeighbour);
+        
+                    if (sqrDist >= kernelRadius * kernelRadius)
+                        continue;
+        
+                    float dst = sqrt(sqrDist);
+                    float3 dirToNeighbour = dst > 0 ? offsetToNeighbour / dst : float3(0, 1, 0);
+
+                    float neighbourDensity = densities[i][0];
+                    float neighbourPressure = PressureFromDensity(neighbourDensity);
+
+                    float sharedPressure = (pressure + neighbourPressure) * 0.5;
+
+                    pressureForce += dirToNeighbour * FluidMaths.RigidBodyKernel(dst, kernelRadius) * sharedPressure / neighbourDensity;
+
+    FOREACH_ADJACENT_VALUE_END()
+    
+    // Apply scaled force
+    float3 force = pressureForce / pDensity[0];
+
+    // Compute r = point - center of mass (which we can assume is the translation part of TR)
+    float3 centerOfMass = info.TR[3].xyz;
+    float3 r = p - centerOfMass;
+    
+    // Compute actual velocity of the point
+    float3 linearVelocity = info.velocity.xyz;
+    float3 angularVelocity = info.angularVelocity.xyz;
+    float3 pointVelocity = linearVelocity + cross(angularVelocity, r);
+    float3 dampingForce = -dampingCoeff * pointVelocity;
+    force += dampingForce;
+
+    // Compute torque = r x F
+    float3 torque = cross(r, pressureForce);
+    
+    debugBuffer[id.x] = float4(force, 1) * 0.0001f;
+
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedForce.x, (int) (feedbackResolution * force.x));
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedForce.y, (int) (feedbackResolution * force.y));
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedForce.z, (int) (feedbackResolution * force.z));
+    
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedTorque.x, (int) (feedbackResolution * torque.x));
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedTorque.y, (int) (feedbackResolution * torque.y));
+    InterlockedAdd(_RigidBodyInfos[rigidBodyIndex].accumulatedTorque.z, (int) (feedbackResolution * torque.z));
 }

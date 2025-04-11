@@ -146,8 +146,6 @@ public class ComputeSdf : MonoBehaviour
             boxBuffer.SetData(boxes);
         }
 
-        Debug.Log($"Boxes {boxes.Count} | Spheres {spheres.Count}");
-
         // Primitives
         sdfCompute.Dispatch(1, numGroups, numGroups, numGroups);
 
