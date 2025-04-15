@@ -143,6 +143,7 @@ public class RigidBodySystem : MonoBehaviour
     {
         rigidBodyParticlesBuffer?.Release();
         rigidBodyInfosBuffer?.Release();
+        debugBuffer?.Release();
     }
 
     internal void Initialize(ComputeShader clientShader, ComputeBuffer fluidPositionsBuffer, ComputeBuffer fluidDensitiesBuffer, ComputeGrid computeGrid, params int[] kernels)

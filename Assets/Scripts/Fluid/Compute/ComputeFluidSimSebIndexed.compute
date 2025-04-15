@@ -3,6 +3,7 @@
 #pragma kernel Pressure
 #pragma kernel Viscosity
 #pragma kernel Step
+#pragma kernel Bounds
 
 #pragma multi_compile DISABLE_3D ENABLE_3D
 
@@ -73,6 +74,7 @@ RWStructuredBuffer<vec> predictedPositions;
 RWStructuredBuffer<vec> velocities;
 RWStructuredBuffer<vec> forces;
 RWStructuredBuffer<float2> densities;
+RWStructuredBuffer<int3> bounds;
 
 RWStructuredBuffer<int> stats;
 
@@ -105,6 +107,19 @@ float3 to_float3(float2 val)
 float3 to_float3(float3 val)
 {
     return val;
+}
+
+void updateBounds(float3 pos)
+{
+    int3 bigPos = (int3) (pos * 1000);
+    
+    [unroll]
+    for (int i = 0; i < 3; i++)
+        InterlockedMin(bounds[0][i], bigPos[i]);
+    
+    [unroll]
+    for (int i = 0; i < 3; i++)
+        InterlockedMax(bounds[1][i], bigPos[i]);
 }
 
 /*
@@ -206,6 +221,13 @@ void Predict(uint3 id : SV_DispatchThreadID)
 
     if (id.x >= x)
         return;
+    
+    // CLEANUP Bounds
+    if (id.x == 0)
+    {
+        bounds[0] = int3(1e9, 1e9, 1e9);
+        bounds[1] = int3(-1e9, -1e9, -1e9);
+    }
     
     // EXTERNAL
     float3 gravity = float3(0, gravityCoeff, 0);
@@ -342,4 +364,18 @@ void Step(uint3 id : SV_DispatchThreadID)
     
     positions[id.x] = pos;
     velocities[id.x] = vel;
+}
+
+[numthreads(X, 1, 1)]
+void Bounds(uint3 id : SV_DispatchThreadID)
+{
+    uint x, _;
+    positions.GetDimensions(x, _);
+
+    if (id.x >= x)
+        return;
+    
+    float3 pos = to_float3(positions[id.x]);
+
+    updateBounds(pos);
 }

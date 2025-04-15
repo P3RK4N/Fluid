@@ -36,6 +36,7 @@ public class ComputeFluidSim : MonoBehaviour
         Pressure,
         Viscosity,
         Step,
+        Bounds
     }
 
     [Header("Simulation settings")]
@@ -71,7 +72,7 @@ public class ComputeFluidSim : MonoBehaviour
     public bool debugEnabled = false;
 
     ComputeShader computeFluid;
-    public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer;
+    public ComputeBuffer positionBuffer, predictedPositionBuffer, velocityBuffer, forceBuffer, densityBuffer, statsBuffer, boundsBuffer;
 
     ComputeGrid grid;
     ComputeSdf sdf;
@@ -126,6 +127,7 @@ public class ComputeFluidSim : MonoBehaviour
         forceBuffer = new ComputeBuffer(numParticles, stride);
         densityBuffer = new ComputeBuffer(numParticles, sizeof(float) * densityCount);
         statsBuffer = new ComputeBuffer(stats.Length, sizeof(uint));
+        boundsBuffer = new ComputeBuffer(2, sizeof(float) * 3);
         statsBuffer.SetData(stats);
     }
 
@@ -138,6 +140,7 @@ public class ComputeFluidSim : MonoBehaviour
             cs.SetBuffer(k, "forces", forceBuffer);
             cs.SetBuffer(k, "densities", densityBuffer);
             cs.SetBuffer(k, "stats", statsBuffer);
+            cs.SetBuffer(k, "bounds", boundsBuffer);
 
             if (predictedPositionBuffer != null)
             {
@@ -239,6 +242,12 @@ public class ComputeFluidSim : MonoBehaviour
             DispatchStep();
             if (debugEnabled) DisplayStats();
         }
+    }
+
+    // Update fluid bounding box (for rendering)
+    public void UpdateBounds()
+    {
+        computeFluid.Dispatch((int)ComputeKernel.Bounds, Mathf.CeilToInt((float)numParticles / X), 1, 1);
     }
 
     private void DisplayStats()
@@ -343,17 +352,18 @@ public class ComputeFluidSim : MonoBehaviour
 
     private void OnDestroy()
     {
-        positionBuffer.Release();
-        predictedPositionBuffer.Release();
-        velocityBuffer.Release();
-        forceBuffer.Release();
-        densityBuffer.Release();
-        statsBuffer.Release();
+        positionBuffer?.Release();
+        predictedPositionBuffer?.Release();
+        velocityBuffer?.Release();
+        forceBuffer?.Release();
+        densityBuffer?.Release();
+        statsBuffer?.Release();
+        boundsBuffer?.Release();
     }
 
     void DispatchStep()
     {
-        int numThreadGroups = Mathf.CeilToInt((float)(numParticles) / X);
+        int numThreadGroups = Mathf.CeilToInt((float)numParticles / X);
 
         computeFluid.Dispatch((int)ComputeKernel.Predict, numThreadGroups, 1, 1);
         grid?.RecalculateGrid(kernelRadius);
