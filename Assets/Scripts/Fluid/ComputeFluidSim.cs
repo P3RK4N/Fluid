@@ -242,6 +242,8 @@ public class ComputeFluidSim : MonoBehaviour
             DispatchStep();
             if (debugEnabled) DisplayStats();
         }
+
+        UpdateBounds();
     }
 
     // Update fluid bounding box (for rendering)

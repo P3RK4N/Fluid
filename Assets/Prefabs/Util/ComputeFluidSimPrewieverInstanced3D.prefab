@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 7145175583330207022}
   - component: {fileID: 6494418974894101448}
   - component: {fileID: 4699336464750270878}
+  - component: {fileID: 6485048132659491358}
   m_Layer: 0
   m_Name: ComputeFluidSimPrewieverInstanced3D
   m_TagString: Untagged
@@ -112,13 +113,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caf5e71c98c697d44bb51d8566bbb826, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  computeRigidBodySystem: {fileID: 0}
-  colliderResolution: 0.01
+  computeRigidBodySystem: {fileID: 7200000, guid: a8a47085c7efbf043aea3bd950e42cc3, type: 3}
+  colliderResolution: 0.1
   debug: 1
-  forceCoeff: 1
-  torqueCoeff: 1
-  dampingCoeff: 1
-  targetDensity: 1
+  forceCoeff: 0.000001
+  torqueCoeff: 0.000000001
+  dampingCoeff: 0
+  targetDensity: 630
   feedbackResolution: 1000
 --- !u!114 &2944419917146687007
 MonoBehaviour:
@@ -127,7 +128,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1422738983421900694}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ed158b27faf3e96459e10386cf4e88ac, type: 3}
   m_Name: 
@@ -187,6 +188,22 @@ MonoBehaviour:
   debugValues: 0
   debugNormals: 1
   resolution: 100
+--- !u!114 &6485048132659491358
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1422738983421900694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9524e914f6f9af747a9b3ce7ccb46e54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mat: {fileID: 2100000, guid: 1c0b018a65a560a47808f1486efa598b, type: 2}
+  targetScale: 0.5
+  debug: 0
+  drawDepthOverlay: 1
 --- !u!1 &1925869560897918117
 GameObject:
   m_ObjectHideFlags: 0

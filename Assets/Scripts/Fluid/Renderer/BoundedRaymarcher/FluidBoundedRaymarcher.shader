@@ -31,12 +31,19 @@
             
                 CBUFFER_START(UnityPerMaterial)
                     float4x4 invVP;
-                    float3 minAABB;
-                    float3 maxAABB;
                 CBUFFER_END
+
+                struct RaymarcherRange
+                {
+                    float3 origin;
+                    float min;
+                    float3 ray;
+                    float max;
+                };
 
                 StructuredBuffer<float3> positions;
                 StructuredBuffer<float3> velocities;
+                StructuredBuffer<int3> bounds;
 
                 SamplerState sampler_bilinearClamp;
 
@@ -45,7 +52,7 @@
                     Varyings o;
 
                     // 6-vertex full-screen quad using triangle list
-                    float2 positions[6] = {
+                    const float2 positions[6] = {
                         float2(-1, -1), // bottom left
                         float2( 1, -1), // bottom right
                         float2(-1,  1), // top left
@@ -55,7 +62,7 @@
                         float2( 1,  1)  // top right
                     };
 
-                    float2 uvs[6] = {
+                    const float2 uvs[6] = {
                         float2(0, 1),
                         float2(1, 1),
                         float2(0, 0),
@@ -100,51 +107,60 @@
                     return outMaxT >= max(outMinT, 0.0); // Only allow forward ray
                 }
 
-                float3 ReconstructWorldPosition(float2 screenUV, float depth, float4x4 invViewProj)
+                void GetBounds(out float3 minn, out float3 maxx)
                 {
-                    // Convert screenUV [0,1] to NDC [-1,1]
-                    float2 ndc = screenUV * 2.0 - 1.0;
-    
-                    // Reconstruct clip space position
-                    float4 clipPos = float4(ndc, depth, 1.0);
-
-                    // Transform to world space
-                    float4 worldPosH = mul(invViewProj, clipPos);
-                    return worldPosH.xyz / worldPosH.w;
+                    minn = (float3)bounds[0] / 1000.0f;
+                    maxx = (float3)bounds[1] / 1000.0f;
                 }
 
-                void ReconstructRay(
-                    float2 screenUV,
-                    float depth,
-                    float4x4 invViewProj,
-                    out float3 rayOriginWS,
-                    out float3 rayEndWS)
+                bool GetRaymarcherRange(float2 screenUV, out RaymarcherRange raymarcherRange)
                 {
-                    // T0: Near plane (z = 0 in clip space)
-                    rayOriginWS = ReconstructWorldPosition(screenUV, 0.0, invViewProj);
+                    float depth = SampleSceneDepth(screenUV, sampler_bilinearClamp);
 
-                    // T1: World position from depth buffer (z = depth in clip space)
-                    rayEndWS = ReconstructWorldPosition(screenUV, depth, invViewProj);
+                    #if UNITY_REVERSED_Z
+                        depth = 1 - depth;
+                    #endif
+
+                    float4 nearCS = float4(screenUV * 2.0f - 1.0f, -1.0f, 1.0f);
+                    float4 depthCS = float4(screenUV * 2.0f - 1.0f, depth * 2.0f - 1.0f, 1.0f);
+
+                    float4 worldNear = mul(invVP, nearCS);
+                    float4 worldDepth = mul(invVP, depthCS);
+
+                    worldNear /= worldNear.w;
+                    worldDepth /= worldDepth.w;
+
+                    float3 cameraRay = worldDepth.xyz - worldNear.xyz;
+                    float tdepth = length(cameraRay);
+                    cameraRay = normalize(cameraRay);
+                    float tmin, tmax;
+                    float3 minn, maxx;
+                    GetBounds(minn, maxx);
+
+                    if (RayBoxIntersection(worldNear.xyz, cameraRay, minn, maxx, tmin, tmax)) // Hit bounds
+                    {
+                        tmin = max(tmin, 0); // Starting from near plane
+                        tmax = min(tmax, tdepth); // Ensure end before depth
+
+                        raymarcherRange.min = tmin;
+                        raymarcherRange.max = tmax;
+                        raymarcherRange.ray = cameraRay;
+                        raymarcherRange.origin = worldNear.xyz;
+
+                        return tmin < tmax;
+                    }
+
+                    return false;
                 }
 
                 float4 frag (Varyings i) : SV_Target
                 {
-                    float depth = SampleSceneDepth(i.screenUV, sampler_bilinearClamp);
-                    return float4(depth, 0, 0, 1);
+                    RaymarcherRange rr;
 
-                    // if (depth >= i.positionCS.z) discard;
-                    
-                    // float3 fragWorldPos = i.positionWS;
-                    // float3 depthWorldPos = WorldPosFromDepth(i.screenUV, depth);
+                    if (!GetRaymarcherRange(i.screenUV, rr))
+                        discard;
 
-                    // float worldDist = distance(depthWorldPos, fragWorldPos);
-
-                    // float3 lightDir = normalize(_MainLightPosition.xyz);
-                    // float diff = max(dot(i.normalWS, lightDir), 0.2);
-                    // float3 lighting = _MainLightColor.rgb * diff;
-
-                    // return float4(lighting * saturate(worldDist), 1);
-                    // return float4(screenUV, 0, 1);
+                    return float4(saturate(rr.max - rr.min), 0, 0, 1);
                 }
             
                 ENDHLSL

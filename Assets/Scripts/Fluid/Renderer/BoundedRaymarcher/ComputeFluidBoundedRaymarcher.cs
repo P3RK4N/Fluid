@@ -7,32 +7,22 @@ using UnityEngine.Rendering;
 public class ComputeFluidBoundedRaymarcher : MonoBehaviour
 {
     [EditorOnly] public Material mat;
-    [EditorOnly] public Mesh mesh;
     [EditorOnly] public float targetScale = 0.5f;
     public bool debug = true;
     public bool drawDepthOverlay = false;
 
     ComputeFluidSim sim;
-    new BoxCollider collider;
 
     RenderTexture target;
-    RenderTexture targetDepth;
+    Texture2D copy;
     MaterialPropertyBlock mpb;
     CommandBuffer cmd;
-
-    Vector3 point = new();
-    Texture2D copy;
-
-    Camera cam;
 
     NativeArray<Color> depthData;
 
     void Awake()
     {
-        cam = Camera.main;
-
         sim = GetComponent<ComputeFluidSim>();
-        collider = GetComponent<BoxCollider>();
 
         target = new RenderTexture
         (
@@ -55,6 +45,7 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
 
         mpb.SetBuffer("positions", sim.positionBuffer);
         mpb.SetBuffer("velocities", sim.velocityBuffer);
+        mpb.SetBuffer("bounds", sim.boundsBuffer);
     }
 
     private void OnDestroy()
@@ -67,14 +58,11 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
         if (sim == null || Camera.current != null) return;
 
         var depthTex = Shader.GetGlobalTexture("_CameraDepthTexture");
-        //(var minn, var maxx) = GetBounds();
 
-        mpb.SetMatrix("invVP", (cam.projectionMatrix * cam.worldToCameraMatrix).inverse);
-        //mpb.SetVector("minAABB", minn);
-        //mpb.SetVector("maxAABB", maxx);
+        mpb.SetMatrix("invVP", (Camera.main.projectionMatrix * Camera.main.worldToCameraMatrix).inverse);
 
         cmd.Clear();
-        cmd.SetupCameraProperties(cam);
+        cmd.SetupCameraProperties(Camera.main);
         cmd.SetRenderTarget(target);
         cmd.SetGlobalTexture("_CameraDepthTexture", depthTex);
         cmd.ClearRenderTarget(false, true, Color.clear);
@@ -90,8 +78,6 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
 
     public (Vector3 min, Vector3 max) GetBounds()
     {
-        sim.UpdateBounds();
-
         Vector3Int[] bigMinMax = new Vector3Int[2];
         sim.boundsBuffer.GetData(bigMinMax);
         Vector3[] minMax = new Vector3[2];
@@ -108,7 +94,6 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
         if (!debug || !Application.isPlaying) return;
 
         VisualizeRaymarchRanges();
-        //MapDepthToWorld();
     }
 
     public static bool RayIntersectsAABB(Vector3 rayOrigin, Vector3 rayDir, Vector3 boxMin, Vector3 boxMax, out float tmin, out float tmax)
@@ -149,8 +134,13 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
 
     private void VisualizeRaymarchRanges()
     {
+        if (depthData == null)
+        {
+            return;
+        }
+
         (var minn, var maxx) = GetBounds();
-        var invPV = (cam.projectionMatrix * cam.worldToCameraMatrix).inverse;
+        var invPV = (Camera.main.projectionMatrix * Camera.main.worldToCameraMatrix).inverse;
 
         for (int i = 0; i < target.height; i++)
             for (int j = 0; j < target.width; j++)
@@ -191,19 +181,6 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
                     }
                 }
             }
-    }
-
-    private void MapDepthToWorld()
-    {
-        var pixels = copy.GetRawTextureData<Vector4>();
-        
-        foreach (var pixel in pixels)
-        {
-            //Debug.Log(pixel);
-
-            //Gizmos.color = Color.red;
-            Gizmos.DrawCube(pixel, Vector3.one * 0.1f);
-        }
     }
 
     void OnGUI()
