@@ -8,10 +8,14 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
 {
     [EditorOnly] public Material mat;
     [EditorOnly] public float targetScale = 0.5f;
+    public float step = 1.0f;
+    public float surfaceThreshold = 200.0f;
+    public float densityCoeff = 0.001f;
     public bool debug = true;
     public bool drawDepthOverlay = false;
 
     ComputeFluidSim sim;
+    ComputeGrid grid;
 
     RenderTexture target;
     Texture2D copy;
@@ -23,6 +27,7 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
     void Awake()
     {
         sim = GetComponent<ComputeFluidSim>();
+        grid = GetComponent<ComputeGrid>();
 
         target = new RenderTexture
         (
@@ -43,9 +48,10 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
     {
         if (sim == null) return;
 
-        mpb.SetBuffer("positions", sim.positionBuffer);
-        mpb.SetBuffer("velocities", sim.velocityBuffer);
         mpb.SetBuffer("bounds", sim.boundsBuffer);
+        mpb.SetBuffer("positions", sim.predictedPositionBuffer);
+        mpb.SetBuffer("densities", sim.densityBuffer);
+        grid.Bind(ref mpb);
     }
 
     private void OnDestroy()
@@ -60,6 +66,9 @@ public class ComputeFluidBoundedRaymarcher : MonoBehaviour
         var depthTex = Shader.GetGlobalTexture("_CameraDepthTexture");
 
         mpb.SetMatrix("invVP", (Camera.main.projectionMatrix * Camera.main.worldToCameraMatrix).inverse);
+        mpb.SetFloat("step", Mathf.Max(step, 0.01f));
+        mpb.SetFloat("densityCoeff", densityCoeff);
+        mpb.SetFloat("surfaceThreshold", surfaceThreshold);
 
         cmd.Clear();
         cmd.SetupCameraProperties(Camera.main);

@@ -16,7 +16,12 @@
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl" 
                 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
                 
+                #define COMPUTE_GRID_SHADER
+                #include "../../../Grid/Compute/ComputeGrid.hlsl"
+                #include "../../../Fluid/Compute/FluidMaths3D.hlsl"
+
                 struct Attributes
                 {
                     float4 positionOS : POSITION;
@@ -31,6 +36,10 @@
             
                 CBUFFER_START(UnityPerMaterial)
                     float4x4 invVP;
+                    float step;
+                    float iso;
+                    float densityCoeff;
+                    float surfaceThreshold;
                 CBUFFER_END
 
                 struct RaymarcherRange
@@ -42,7 +51,7 @@
                 };
 
                 StructuredBuffer<float3> positions;
-                StructuredBuffer<float3> velocities;
+                StructuredBuffer<float2> densities;
                 StructuredBuffer<int3> bounds;
 
                 SamplerState sampler_bilinearClamp;
@@ -113,7 +122,56 @@
                     maxx = (float3)bounds[1] / 1000.0f;
                 }
 
-                bool GetRaymarcherRange(float2 screenUV, out RaymarcherRange raymarcherRange)
+                float dot2(float3 p)
+                {
+                    return dot(p, p);
+                }
+
+                float CalculateDensity(float3 pos)
+                {
+                    float density = 0;
+                    float _bucketRadius2 = _bucketRadius * _bucketRadius;
+
+                    FOREACH_ADJACENT_VALUE_BEGIN(pos, i)
+
+                        float sqrDist = dot2(positions[i] - pos);
+        
+                        if (sqrDist >= _bucketRadius2)
+                            continue;
+    
+                        float dst = sqrt(sqrDist);
+                        density += FluidMaths.DensityKernel(dst, _bucketRadius);
+
+                    FOREACH_ADJACENT_VALUE_END()
+    
+                    return density;
+                }
+
+                float3 CalculateNormal(float3 pos)
+                {
+                    float3 densityNormal = 0;
+                    float _bucketRadius2 = _bucketRadius * _bucketRadius;
+	
+                    FOREACH_ADJACENT_VALUE_BEGIN(pos, i)
+
+                        float3 offsetToNeighbour = positions[i] - pos;
+                        float sqrDist = dot2(offsetToNeighbour);
+        
+                        if (sqrDist >= _bucketRadius2)
+                            continue;
+        
+                        float dst = sqrt(sqrDist);
+                        float3 dirToNeighbour = dst > 0 ? offsetToNeighbour / dst : float3(0, 1, 0);
+
+                        float neighbourDensity = densities[i][0];
+                        densityNormal += dirToNeighbour * FluidMaths.DensityDerivative(dst, _bucketRadius) * neighbourDensity;
+
+                    FOREACH_ADJACENT_VALUE_END()
+
+                    return normalize(densityNormal);
+                }
+
+                bool GetRaymarcherRange(float2 screenUV, float margin, out RaymarcherRange raymarcherRange)
                 {
                     float depth = SampleSceneDepth(screenUV, sampler_bilinearClamp);
 
@@ -137,7 +195,7 @@
                     float3 minn, maxx;
                     GetBounds(minn, maxx);
 
-                    if (RayBoxIntersection(worldNear.xyz, cameraRay, minn, maxx, tmin, tmax)) // Hit bounds
+                    if (RayBoxIntersection(worldNear.xyz, cameraRay, minn - margin, maxx + margin, tmin, tmax)) // Hit bounds
                     {
                         tmin = max(tmin, 0); // Starting from near plane
                         tmax = min(tmax, tdepth); // Ensure end before depth
@@ -157,10 +215,72 @@
                 {
                     RaymarcherRange rr;
 
-                    if (!GetRaymarcherRange(i.screenUV, rr))
+                    if (!GetRaymarcherRange(i.screenUV, _bucketRadius, rr))
                         discard;
 
-                    return float4(saturate(rr.max - rr.min), 0, 0, 1);
+                    const int maxSteps = 512;
+                    float t = rr.min;
+                    float densityAccum = 0.0;
+                    float3 color = float3(0, 0, 0);
+
+                    float3 lightDir = GetMainLight().direction;
+                    float3 vibrantWaterColor = float3(0.3, 0.6, 0.9); // Ghibli water tone
+                    float3 foamColor = float3(0.9, 0.9, 0.95);
+
+                    bool entered = false;
+                    float3 entryNormal = float3(0, 1, 0);
+                    float entryDepth = 0.0;
+                    float3 entryPoint = float3(0, 0, 0);
+
+                    [loop]
+                    for (int i = 0; i < maxSteps && t < rr.max && densityAccum < 1.0; ++i)
+                    {
+                        float3 p = rr.origin + t * rr.ray;
+                        float density = CalculateDensity(p);
+
+                        if (density > surfaceThreshold)
+                        {
+                            if (!entered)
+                            {
+                                entered = true;
+                                entryNormal = normalize(CalculateNormal(p));
+                                entryDepth = t;
+                                entryPoint = p;
+                            }
+
+                            float opacity = saturate(density * densityCoeff);
+                            densityAccum += opacity * 0.05;
+                        }
+
+                        t += step;
+                    }
+
+                    // Stylized shading only happens if we entered the fluid
+                    if (entered)
+                    {
+                        // Simple banded lighting (toon)
+                        float diffuse = saturate(dot(entryNormal, -lightDir));
+                        float3 bandedLighting = (
+                            diffuse < 0.3 ? 0.2 :
+                            diffuse < 0.6 ? 0.5 :
+                            1.0
+                        ) * vibrantWaterColor;
+
+                        // Vertical fade effect (lighter near top)
+                        float heightFade = saturate((entryPoint.y + 1.0) * 0.5); // assumes water ~ y=0
+                        bandedLighting *= lerp(0.6, 1.2, heightFade);
+
+                        // Add foam if shallow
+                        float foamAmount = saturate(1.0 - entryDepth * 2.0) * 0.8; // shallow water more foam
+                        float3 finalColor = lerp(bandedLighting, foamColor, foamAmount);
+
+                        // Blend by accumulated density (transparency)
+                        color = finalColor * saturate(densityAccum);
+                    }
+
+
+
+                    return float4(color, saturate(densityAccum));
                 }
             
                 ENDHLSL

@@ -224,6 +224,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: ComputeFluidSimSebPrewieverInstanced3D
       objectReference: {fileID: 0}
+    - target: {fileID: 6485048132659491358, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: step
+      value: 0.04
+      objectReference: {fileID: 0}
+    - target: {fileID: 6485048132659491358, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: targetScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6485048132659491358, guid: db7eaa20cbde8144b899eb04afd4b0ca, type: 3}
+      propertyPath: surfaceThreshold
+      value: 347.7
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

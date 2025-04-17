@@ -16,6 +16,7 @@ public class ComputeGrid : MonoBehaviour
     uint[] debug = new uint[10] { 0, 0, 0, 0, 0, 0, 0, 0, 9, 10 };
 
     HashSet<ComputeShader> binded = new();
+    HashSet<MaterialPropertyBlock> bindedMats = new();
 
     void Awake()
     {
@@ -55,6 +56,16 @@ public class ComputeGrid : MonoBehaviour
         }
     }
 
+    public void Bind(ref MaterialPropertyBlock clientShader)
+    {
+        bindedMats.Add(clientShader);
+        clientShader.SetInt("_gridSize", gridSize);
+        clientShader.SetInt("_gridSize2", gridSize * gridSize);
+        clientShader.SetInt("_gridSize3", gridSize * gridSize * gridSize);
+        clientShader.SetInt("_bucketCapacity", bucketCapacity);
+        clientShader.SetBuffer("IndexGrid", gridBuffer);
+    }
+
     public void RecalculateGrid(float bucketRadius)
     {
         foreach (var b in binded)
@@ -62,6 +73,12 @@ public class ComputeGrid : MonoBehaviour
             b.SetFloat("_bucketRadius", bucketRadius);
             b.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
         }
+        foreach (var b in bindedMats)
+        {
+            b.SetFloat("_bucketRadius", bucketRadius);
+            b.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
+        }
+
         computeGrid.SetFloat("_bucketRadius", bucketRadius);
         computeGrid.SetFloat("_inverseBucketRadius", 1.0f / bucketRadius);
 

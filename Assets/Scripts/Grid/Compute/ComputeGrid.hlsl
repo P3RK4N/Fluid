@@ -10,8 +10,13 @@ uint _bucketCapacity;
 float _bucketRadius;
 float _inverseBucketRadius;
 
-RWStructuredBuffer<uint> IndexGrid;             // id -> xyz
-RWStructuredBuffer<uint> _offsets;
+#ifndef COMPUTE_GRID_SHADER
+    RWStructuredBuffer<uint> IndexGrid;             // id -> xyz
+    RWStructuredBuffer<uint> _offsets;
+#else
+    StructuredBuffer<uint> IndexGrid;             // id -> xyz
+    StructuredBuffer<uint> _offsets;
+#endif
 
 // Returns valid bucketIndex for current step (step 0 is identity)
 // TODO: Think of better way since there MUST NOT be collisions between steps. (For now just use next bucket)
