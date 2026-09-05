@@ -4,7 +4,7 @@ Example vortex created by moving a collider
 
 <img width="449" height="202" alt="image" src="https://github.com/user-attachments/assets/c91ee5a2-d573-4810-97b3-fa5b7ddb32ee" />
 
-Raymarcher optimizations by downscaling only the fluid and bounding the march
+Raymarcher optimizations by downscaling only the fluid
 
 <img width="590" height="577" alt="image" src="https://github.com/user-attachments/assets/985fca8e-c6a4-410f-a976-bedc2a7e5080" />
 
